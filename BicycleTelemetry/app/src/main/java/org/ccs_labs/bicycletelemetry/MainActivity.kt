@@ -10,10 +10,14 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.os.PersistableBundle
+import android.util.Log
 import java.lang.IllegalArgumentException
 import org.zeromq.ZMQException
 
-const val DEBUG_TAG : String = "MainActivity"
+const val DEBUG_TAG : String = "BikeMain"
+
+const val STATE_SERVER_ADDRESS = "serverAddress"
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private var communicator : Communicator? = null
@@ -29,21 +33,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         setContentView(R.layout.activity_main)
 
         btConnect.setOnClickListener {
-            try {
-                communicator = Communicator(
-                    address = etServerAddress.text.toString(),
-                    intervalMillis = 20,
-                    activity = this
-                )
-                communicator!!.start() // TODO: stop on pause, restart on resume
-                tvConnectionStatus.text = if (communicator!!.isConnected) "Connected" else "Unable to connect"
-                //sensorReader = SensorReader(this, communicator!!)
-            } catch (e: IllegalArgumentException) {
-                tvConnectionStatus.text = "Invalid server address"
-            } catch (e: ZMQException) {
-                tvConnectionStatus.text = "Unable to connect: " + e.localizedMessage
-            }
+            communicator = Communicator(
+                address = etServerAddress.text.toString(),
+                intervalMillis = 50,
+                activity = this
+            )
+            communicator!!.start() // TODO: stop on pause, restart on resume
+            //tvConnectionStatus.text = if (communicator!!.isConnected) "Connected" else "Unable to connect"
+            //sensorReader = SensorReader(this, communicator!!)
+
             // communicator?.close()
+        }
+
+        if (savedInstanceState != null) {
+            /*
+            Restore app state. (Needed e.g. for persistence after device rotation.)
+            Won't happen if the app was restarted.
+             */
+            Log.d(DEBUG_TAG, "Loading saved instance state")
+            val t = savedInstanceState.getString(STATE_SERVER_ADDRESS)
+            etServerAddress.setText(if (t != null && t.isNotEmpty()) t else "tcp://localhost:15007")
+        } else {
+            Log.d(DEBUG_TAG, "No saved instance state")
         }
 
         mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -82,6 +93,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         communicator?.close()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        /*
+        Save current app state. (Needed e.g. for persistence after device rotation.)
+         */
+
+        Log.d(DEBUG_TAG, "Saving instance state")
+        outState.putString(STATE_SERVER_ADDRESS, etServerAddress.text.toString())
+
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
             System.arraycopy(event.values, 0, mAccelerometerReading, 0, mAccelerometerReading.size)
@@ -97,9 +119,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mAccelerometerReading,
             mMagnetometerReading
         )
-        SensorManager.getOrientation(rotationMatrix, mOrientationAngles)
+        synchronized(mOrientationAngles) {
+            SensorManager.getOrientation(rotationMatrix, mOrientationAngles)
+        }
 
-        tvCurrentSteeringAngle.text = String.format("%.1f", Math.toDegrees(mOrientationAngles[0].toDouble()))
+        tvCurrentSteeringAngle.text = String.format("%.1f", Math.toDegrees(mOrientationAngles[0].toDouble())) + " °"
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
