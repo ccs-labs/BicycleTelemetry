@@ -5,4 +5,5 @@
     <string name="steering_angle_title">Steering angle:</string>
     <string name="connection_status_not_connected">Not connected</string>
     <string name="reset_straight">Calibrate straight</string>
+    <string name="server_address_default">tcp://131.234.121.241:15007</string>
 </resources>

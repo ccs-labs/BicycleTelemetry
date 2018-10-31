@@ -19,6 +19,12 @@ const val DEBUG_TAG : String = "BikeMain"
 
 const val STATE_SERVER_ADDRESS = "serverAddress"
 
+/**
+ * For low pass filter:
+ * lower alpha should equal smoother movement
+ */
+const val ALPHA = 0.5f
+
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private var communicator : Communicator? = null
 
@@ -26,24 +32,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var mSensorManager : SensorManager
     private val mAccelerometerReading = FloatArray(3)
     private val mMagnetometerReading = FloatArray(3)
+
+    /**
+     * Indicates whether we should attempt to restore the communicator on resume or not.
+     */
+    private var mCommunicatorHadStartingAttempt = false
+
     val mOrientationAngles = FloatArray(3)
     val mOrientationStraight = FloatArray(3) { 0f }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         btConnect.setOnClickListener {
-            communicator = Communicator(
-                address = etServerAddress.text.toString(),
-                intervalMillis = 50,
-                activity = this
-            )
-            communicator!!.start() // TODO: stop on pause, restart on resume
-            //tvConnectionStatus.text = if (communicator!!.isConnected) "Connected" else "Unable to connect"
-            //sensorReader = SensorReader(this, communicator!!)
-
-            // communicator?.close()
+            initializeCommunicator()
+            mCommunicatorHadStartingAttempt = true
         }
 
         btResetStraight.setOnClickListener {
@@ -68,6 +73,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
     }
 
+    private fun initializeCommunicator() {
+        communicator?.close()
+        communicator = Communicator(
+            address = etServerAddress.text.toString(),
+            intervalMillis = 50,
+            activity = this
+        )
+        communicator!!.start() // TODO: stop on pause, restart on resume
+    }
+
     override fun onResume() {
         super.onResume()
 
@@ -87,12 +102,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 SensorManager.SENSOR_DELAY_GAME
             )
         }
+
+        //initializeCommunicator()
     }
 
     override fun onPause() {
         super.onPause()
 
         mSensorManager.unregisterListener(this)
+        communicator?.close()
+        communicator = null
     }
 
     override fun onDestroy() {
@@ -112,11 +131,25 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onSaveInstanceState(outState)
     }
 
+    /**
+     * Low pass filter implementation taken from https://stackoverflow.com/a/27847338/1018176
+     */
+    private fun applyLowPassFilter(input: FloatArray, output: FloatArray?): FloatArray {
+        if (output == null) return input
+
+        for (i in input.indices) {
+            output[i] = output[i] + ALPHA * (input[i] - output[i])
+        }
+        return output
+    }
+
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            System.arraycopy(event.values, 0, mAccelerometerReading, 0, mAccelerometerReading.size)
+            //System.arraycopy(event.values, 0, mAccelerometerReading, 0, mAccelerometerReading.size)
+            applyLowPassFilter(event.values.clone(), mAccelerometerReading)
         } else if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
-            System.arraycopy(event.values, 0, mMagnetometerReading, 0, mMagnetometerReading.size)
+            //System.arraycopy(event.values, 0, mMagnetometerReading, 0, mMagnetometerReading.size)
+            applyLowPassFilter(event.values.clone(), mMagnetometerReading)
         }
 
         val rotationMatrix = FloatArray(9)

@@ -75,6 +75,8 @@ class Communicator(
     }
 
     override fun close() {
-        context.close()
+        if (!context.isClosed) {
+            context.close()
+        }
     }
 }
