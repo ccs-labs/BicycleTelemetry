@@ -27,6 +27,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val mAccelerometerReading = FloatArray(3)
     private val mMagnetometerReading = FloatArray(3)
     val mOrientationAngles = FloatArray(3)
+    val mOrientationStraight = FloatArray(3) { 0f }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +44,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             //sensorReader = SensorReader(this, communicator!!)
 
             // communicator?.close()
+        }
+
+        btResetStraight.setOnClickListener {
+            mOrientationStraight[0] = mOrientationAngles[0]
+            mOrientationStraight[1] = mOrientationAngles[1]
+            mOrientationStraight[2] = mOrientationAngles[2]
+            // TODO: find a more Kotlin way of doing this…
         }
 
         if (savedInstanceState != null) {
@@ -123,7 +131,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             SensorManager.getOrientation(rotationMatrix, mOrientationAngles)
         }
 
-        tvCurrentSteeringAngle.text = String.format("%.1f", Math.toDegrees(mOrientationAngles[0].toDouble())) + " °"
+        tvCurrentSteeringAngle.text = String.format("%.1f",
+            Math.toDegrees((mOrientationAngles[0] - mOrientationStraight[0]).toDouble())) + " °"
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {

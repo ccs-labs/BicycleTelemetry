@@ -37,17 +37,23 @@ class Communicator(
                 // send: http://api.zeromq.org/2-1:zmq-send
                 // missing message problem solver: http://zguide.zeromq.org/page:all#Missing-Message-Problem-Solver
 
-                val success = sendSocket.send(activity.mOrientationAngles[0].toString())
-                if (success) {
-                    Log.d(COMMUNICATOR_DEBUG_TAG, "Sent " + activity.mOrientationAngles[0].toString())
-                } else {
-                    when (sendSocket.errno()) {
-                        ZMQ.Error.EAGAIN.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: EAGAIN")
-                        ZMQ.Error.ENOTSUP.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: ENOTSUP")
-                        ZMQ.Error.EFSM.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: EFSM")
-                        ZMQ.Error.ETERM.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: ETERM")
-                        ZMQ.Error.ENOTSOCK.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: ENOTSOCK")
-                        else -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: errno " + sendSocket.errno())
+                synchronized(activity.mOrientationAngles) {
+                    val success = sendSocket.send(
+                        (activity.mOrientationAngles[0] - activity.mOrientationStraight[0]).toString()
+                    )
+                    if (success) {
+                        Log.d(COMMUNICATOR_DEBUG_TAG, "Sent " +
+                                (activity.mOrientationAngles[0] - activity.mOrientationStraight[0]).toString())
+                    } else {
+                        // TODO: is this necessary or does JeroMQ produce regular exceptions?
+                        when (sendSocket.errno()) {
+                            ZMQ.Error.EAGAIN.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: EAGAIN")
+                            ZMQ.Error.ENOTSUP.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: ENOTSUP")
+                            ZMQ.Error.EFSM.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: EFSM")
+                            ZMQ.Error.ETERM.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: ETERM")
+                            ZMQ.Error.ENOTSOCK.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: ENOTSOCK")
+                            else -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: errno " + sendSocket.errno())
+                        }
                     }
                 }
 
