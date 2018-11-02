@@ -63,11 +63,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             Restore app state. (Needed e.g. for persistence after device rotation.)
             Won't happen if the app was restarted.
              */
-            Log.d(DEBUG_TAG, "Loading saved instance state")
+            //Log.d(DEBUG_TAG, "Loading saved instance state")
             val t = savedInstanceState.getString(STATE_SERVER_ADDRESS)
             etServerAddress.setText(if (t != null && t.isNotEmpty()) t else "tcp://localhost:15007")
         } else {
-            Log.d(DEBUG_TAG, "No saved instance state")
+            //Log.d(DEBUG_TAG, "No saved instance state")
         }
 
         mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -90,7 +90,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mSensorManager.registerListener(
                 this,
                 accelerometer,
-                SensorManager.SENSOR_DELAY_FASTEST,
+                // SensorManager.SENSOR_DELAY_FASTEST,
+                SensorManager.SENSOR_DELAY_GAME,
                 SensorManager.SENSOR_DELAY_GAME
             )
         }
@@ -98,7 +99,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mSensorManager.registerListener(
                 this,
                 magneticField,
-                SensorManager.SENSOR_DELAY_FASTEST,
+                // SensorManager.SENSOR_DELAY_FASTEST,
+                SensorManager.SENSOR_DELAY_GAME,
                 SensorManager.SENSOR_DELAY_GAME
             )
         }
@@ -124,8 +126,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         /*
         Save current app state. (Needed e.g. for persistence after device rotation.)
          */
-
-        Log.d(DEBUG_TAG, "Saving instance state")
         outState.putString(STATE_SERVER_ADDRESS, etServerAddress.text.toString())
 
         super.onSaveInstanceState(outState)
