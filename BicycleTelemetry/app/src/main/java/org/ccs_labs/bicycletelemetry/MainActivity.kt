@@ -10,10 +10,8 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
-import android.os.PersistableBundle
-import android.util.Log
-import java.lang.IllegalArgumentException
-import org.zeromq.ZMQException
+import android.view.Menu
+import android.view.MenuItem
 
 const val DEBUG_TAG : String = "BikeMain"
 
@@ -47,6 +45,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         setContentView(R.layout.activity_main)
 
         btConnect.setOnClickListener {
+            saveCurrentServerAddress()
             initializeCommunicator()
             mCommunicatorHadStartingAttempt = true
         }
@@ -65,12 +64,44 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
              */
             //Log.d(DEBUG_TAG, "Loading saved instance state")
             val t = savedInstanceState.getString(STATE_SERVER_ADDRESS)
-            etServerAddress.setText(if (t != null && t.isNotEmpty()) t else "tcp://localhost:15007")
+            etServerAddress.setText(if (t != null && t.isNotEmpty()) t else getSavedServerAddress())
         } else {
             //Log.d(DEBUG_TAG, "No saved instance state")
+            etServerAddress.setText(getSavedServerAddress())
         }
 
         mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.main_activity_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem?): Boolean {
+        return when (item?.itemId) {
+            R.id.action_default_server -> {
+                etServerAddress.setText(getString(R.string.server_address_default))
+                true
+            }
+            else -> {
+                super.onOptionsItemSelected(item)
+            }
+        }
+    }
+
+    private fun saveCurrentServerAddress() {
+        val sharedPref = getPreferences(Context.MODE_PRIVATE) ?: return
+        with (sharedPref.edit()) {
+            putString(getString(R.string.sharedprefs_key_server_address), etServerAddress.text.toString())
+            apply()
+        }
+    }
+
+    private fun getSavedServerAddress() : String {
+        val sharedPref = getPreferences(Context.MODE_PRIVATE) ?: return getString(R.string.server_address_default)
+        return sharedPref.getString(
+            getString(R.string.sharedprefs_key_server_address), getString(R.string.server_address_default)) as String
     }
 
     private fun initializeCommunicator() {
