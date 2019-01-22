@@ -137,6 +137,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         //initializeCommunicator()
+        // TODO: only initialize if "Connect" is active
     }
 
     override fun onPause() {
@@ -181,9 +182,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             SensorManager.getOrientation(rotationMatrix, mOrientationAngles)
         }
 
-        tvCurrentSteeringAngle.text = String.format("%.1f",
-            Math.toDegrees(normalizeAngleDegrees((if (cbInvertRotation.isChecked) -1.0 else 1.0) *
-                    (mOrientationAngles[0] - mOrientationStraight[0]).toDouble()))) + " °"
+        tvCurrentSteeringAngle.text = getString(R.string.current_steering_angle_format).format(
+            normalizeAngleDegrees(Math.toDegrees(getCurrentAzimuth()))
+            // Normalize angle again b/c who knows what toDegrees will do to my previously normalized angle in radians.
+        )
     }
 
     fun normalizeAngleDegrees(deg: Double) : Double {
@@ -192,6 +194,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     fun normalizeAngleRadians(rad: Double) : Double {
         return (rad + Math.PI) % (2 * Math.PI) - Math.PI
+    }
+
+    fun getCurrentAzimuth() : Double {
+        return normalizeAngleRadians(
+            (if (cbInvertRotation.isChecked) -1.0 else 1.0) *
+                    (mOrientationAngles[0] - mOrientationStraight[0]).toDouble()
+        )
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {

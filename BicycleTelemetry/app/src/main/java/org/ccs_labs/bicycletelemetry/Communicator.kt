@@ -2,9 +2,10 @@ package org.ccs_labs.bicycletelemetry
 
 import android.util.Log
 import kotlinx.android.synthetic.main.activity_main.*
-import org.zeromq.ZMQ
-import org.zeromq.ZMQException
 import java.io.Closeable
+import java.io.IOException
+import java.net.*
+import java.util.*
 
 const val COMMUNICATOR_DEBUG_TAG : String = "BikeCommunicator"
 
@@ -13,48 +14,61 @@ class Communicator(
     private val intervalMillis: Long,
     private val activity: MainActivity
 ) : Closeable, Thread() {
+    var stopSending = false
+    private var datagramSocket : DatagramSocket? = null
 
-    private lateinit var context: ZMQ.Context
-    private var isConnected = false
+    private fun setConnectionStatusText(msg: String) {
+        activity.runOnUiThread {
+            activity.tvConnectionStatus.text = msg
+        }
+    }
 
     override fun run() {
         try {
-            context = ZMQ.context(1)
-            val sendSocket: ZMQ.Socket = context.socket(ZMQ.PUSH)
-            isConnected = sendSocket.connect(address)
-            var previousTime: Long = System.currentTimeMillis()
+            stopSending = false
 
-            activity.runOnUiThread {
-                activity.tvConnectionStatus.text = if (isConnected) "Connected" else "Unable to connect"
-            }
-            if (!isConnected) {
+            val addressElements = address.split(":")
+            if (addressElements.size != 2) {
+                setConnectionStatusText(activity.getString(R.string.invalid_address))
                 return
             }
+            val host = addressElements[0]
+            var port: Int? = null
+            try {
+                port = addressElements[1].toInt()
+            } catch (e: NumberFormatException) {
+                setConnectionStatusText(activity.getString(R.string.invalid_port).format(addressElements[1]))
+            }
+            datagramSocket = DatagramSocket(port!!, InetAddress.getByName("0.0.0.0"))
+            datagramSocket!!.connect(InetAddress.getByName(host), port)
+            var previousTime: Long = System.currentTimeMillis()
 
-            while (!Thread.currentThread().isInterrupted) {
-                // send: http://api.zeromq.org/2-1:zmq-send
-                // missing message problem solver: http://zguide.zeromq.org/page:all#Missing-Message-Problem-Solver
+            setConnectionStatusText(activity.getString(R.string.connection_status_sending))
 
+            while (!Thread.currentThread().isInterrupted && !stopSending) {
                 synchronized(activity.mOrientationAngles) {
-                    val success = sendSocket.send(
-                        (activity.normalizeAngleRadians((if (activity.cbInvertRotation.isChecked) -1 else 1) *
-                                (activity.mOrientationAngles[0] - activity.mOrientationStraight[0]) as Double))
-                            .toString()
-                    )
-                    if (success) {
-                        Log.d(COMMUNICATOR_DEBUG_TAG, "Sent " +
-                                (activity.mOrientationAngles[0] - activity.mOrientationStraight[0]).toString())
-                    } else {
-                        // TODO: is this necessary or does JeroMQ produce regular exceptions?
-                        // TODO: try to reconnect (sometimes the app shows "connected" even when no server is running)
-                        when (sendSocket.errno()) {
-                            ZMQ.Error.EAGAIN.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: EAGAIN")
-                            ZMQ.Error.ENOTSUP.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: ENOTSUP")
-                            ZMQ.Error.EFSM.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: EFSM")
-                            ZMQ.Error.ETERM.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: ETERM")
-                            ZMQ.Error.ENOTSOCK.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: ENOTSOCK")
-                            else -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: errno " + sendSocket.errno())
-                        }
+                    val azimuth = activity.getCurrentAzimuth()
+                    val msg = "%.5f".format(Locale.ROOT, azimuth).toByteArray(Charsets.UTF_8)
+                    val datagramPacket = DatagramPacket(msg, msg.size)
+
+                    try {
+                        datagramSocket!!.send(datagramPacket)
+                    } catch (e: IOException) {
+                        // "if an I/O error occurs."
+                        setConnectionStatusText(activity.getString(R.string.send_io_exception).format(e.message))
+                        Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
+                        tryReconnect(host, port)
+                    } catch (e: SecurityException) {
+                        // "if a security manager exists and its checkMulticast or
+                        // checkConnect method doesn't allow the send."
+                        setConnectionStatusText(activity.getString(R.string.send_security_exception).format(e.message))
+                        Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
+                    } catch (e: PortUnreachableException) {
+                        // "may be thrown if the socket is connected to a currently unreachable destination.
+                        // Note, there is no guarantee that the exception will be thrown."
+                        setConnectionStatusText(
+                            activity.getString(R.string.send_port_unreachable_exception))
+                        Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
                     }
                 }
 
@@ -66,18 +80,42 @@ class Communicator(
                 //Thread.sleep(intervalMillis)
                 previousTime = System.currentTimeMillis()
             }
-        } catch (e: IllegalArgumentException) {
-            activity.runOnUiThread { activity.tvConnectionStatus.text = "Invalid server address" }
-        } catch (e: ZMQException) {
-            activity.runOnUiThread { activity.tvConnectionStatus.text = "Unable to connect: " + e.localizedMessage }
-        } catch (e: java.lang.Exception) {
-            activity.runOnUiThread { activity.tvConnectionStatus.text = "Exception: " + e.toString() }
+        } catch (e: SocketException) {
+            // DatagramSocket constructor:
+            // "if the socket could not be opened, or the socket could not bind to the specified local port."
+            setConnectionStatusText(activity.getString(R.string.socket_exception).format(e.message))
+            Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
+        } catch (e: SecurityException) {
+            // DatagramSocket constructor:
+            // "if a security manager exists and its checkListen method doesn't allow the operation."
+            setConnectionStatusText(activity.getString(R.string.security_exception))
+            Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
+        } finally {
+            datagramSocket?.close()
+        }
+    }
+
+    private fun tryReconnect(host: String, port: Int) {
+        try {
+            datagramSocket!!.disconnect()
+            datagramSocket!!.connect(InetAddress.getByName(host), port)
+            if (datagramSocket!!.isConnected) {
+                setConnectionStatusText(activity.getString(R.string.connection_status_sending))
+            }
+        } catch (e: SocketException) {
+            // DatagramSocket constructor:
+            // "if the socket could not be opened, or the socket could not bind to the specified local port."
+
+            // Do not replace the status text here because the error that lead to this reconnect attempt
+            // could be more important… TODO: really?
+            // setConnectionStatusText(activity.getString(R.string.socket_exception).format(e.message))
+            Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
         }
     }
 
     override fun close() {
-        if (!context.isClosed) {
-            context.close()
-        }
+        stopSending = true
+        this.join()
+        datagramSocket?.close()
     }
 }
