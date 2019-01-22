@@ -9,4 +9,5 @@
     <string name="server_address_default">tcp://131.234.121.241:15007</string>
     <string name="sharedprefs_id">org.ccs_labs.bicycletelemetry.settings</string>
     <string name="sharedprefs_key_server_address">server_address</string>
+    <string name="cbInvertRotation">Invert rotation</string>
 </resources>

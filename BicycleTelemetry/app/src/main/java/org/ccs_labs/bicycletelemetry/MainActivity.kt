@@ -162,25 +162,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onSaveInstanceState(outState)
     }
 
-    /**
-     * Low pass filter implementation taken from https://stackoverflow.com/a/27847338/1018176
-     */
-    private fun applyLowPassFilter(input: FloatArray, output: FloatArray?): FloatArray {
-        if (output == null) return input
-
-        for (i in input.indices) {
-            output[i] = output[i] + ALPHA * (input[i] - output[i])
-        }
-        return output
-    }
-
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            //System.arraycopy(event.values, 0, mAccelerometerReading, 0, mAccelerometerReading.size)
-            applyLowPassFilter(event.values.clone(), mAccelerometerReading)
+            System.arraycopy(event.values, 0, mAccelerometerReading, 0, mAccelerometerReading.size)
         } else if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
-            //System.arraycopy(event.values, 0, mMagnetometerReading, 0, mMagnetometerReading.size)
-            applyLowPassFilter(event.values.clone(), mMagnetometerReading)
+            System.arraycopy(event.values, 0, mMagnetometerReading, 0, mMagnetometerReading.size)
         }
 
         val rotationMatrix = FloatArray(9)
@@ -196,7 +182,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         tvCurrentSteeringAngle.text = String.format("%.1f",
-            Math.toDegrees((mOrientationAngles[0] - mOrientationStraight[0]).toDouble())) + " °"
+            Math.toDegrees(normalizeAngleDegrees((if (cbInvertRotation.isChecked) -1.0 else 1.0) *
+                    (mOrientationAngles[0] - mOrientationStraight[0]).toDouble()))) + " °"
+    }
+
+    fun normalizeAngleDegrees(deg: Double) : Double {
+        return (deg + 180) % 360 - 180
+    }
+
+    fun normalizeAngleRadians(rad: Double) : Double {
+        return (rad + Math.PI) % (2 * Math.PI) - Math.PI
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {

@@ -5,8 +5,6 @@ import kotlinx.android.synthetic.main.activity_main.*
 import org.zeromq.ZMQ
 import org.zeromq.ZMQException
 import java.io.Closeable
-import java.lang.Error
-import java.lang.Exception
 
 const val COMMUNICATOR_DEBUG_TAG : String = "BikeCommunicator"
 
@@ -39,13 +37,16 @@ class Communicator(
 
                 synchronized(activity.mOrientationAngles) {
                     val success = sendSocket.send(
-                        (activity.mOrientationAngles[0] - activity.mOrientationStraight[0]).toString()
+                        (activity.normalizeAngleRadians((if (activity.cbInvertRotation.isChecked) -1 else 1) *
+                                (activity.mOrientationAngles[0] - activity.mOrientationStraight[0]) as Double))
+                            .toString()
                     )
                     if (success) {
                         Log.d(COMMUNICATOR_DEBUG_TAG, "Sent " +
                                 (activity.mOrientationAngles[0] - activity.mOrientationStraight[0]).toString())
                     } else {
                         // TODO: is this necessary or does JeroMQ produce regular exceptions?
+                        // TODO: try to reconnect (sometimes the app shows "connected" even when no server is running)
                         when (sendSocket.errno()) {
                             ZMQ.Error.EAGAIN.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: EAGAIN")
                             ZMQ.Error.ENOTSUP.code -> Log.e(COMMUNICATOR_DEBUG_TAG, "Send: ENOTSUP")
