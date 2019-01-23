@@ -17,16 +17,8 @@ class Communicator(
     var stopSending = false
     private var datagramSocket : DatagramSocket? = null
 
-    private fun setConnectionStatusText(msg: String) {
-        activity.runOnUiThread {
-            activity.tvConnectionStatus.text = msg
-        }
-    }
-
     override fun run() {
         try {
-            stopSending = false
-
             val addressElements = address.split(":")
             if (addressElements.size != 2) {
                 setConnectionStatusText(activity.getString(R.string.invalid_address))
@@ -43,7 +35,7 @@ class Communicator(
             datagramSocket!!.connect(InetAddress.getByName(host), port)
             var previousTime: Long = System.currentTimeMillis()
 
-            setConnectionStatusText(activity.getString(R.string.connection_status_sending))
+            setConnected(true)
 
             while (!Thread.currentThread().isInterrupted && !stopSending) {
                 synchronized(activity.mOrientationAngles) {
@@ -92,6 +84,32 @@ class Communicator(
             Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
         } finally {
             datagramSocket?.close()
+            setConnected(false)
+        }
+    }
+
+    /**
+     * Apply this communicator's connection status in the parent activity.
+     * Also sets this.stopSending to true if connected. Set this to false if you want to stop transmitting.
+     */
+    private fun setConnected(connected: Boolean) {
+        // TODO: this is not very MVC…
+        stopSending = !connected
+        activity.mCommunicatorStarted = connected
+        activity.runOnUiThread {
+            if (connected) {
+                setConnectionStatusText(activity.getString(R.string.connection_status_sending))
+                activity.btConnect.text = activity.getString(R.string.stop_sending)
+            } else {
+                setConnectionStatusText(activity.getString(R.string.connection_status_not_connected))
+                activity.btConnect.text = activity.getString(R.string.connect)
+            }
+        }
+    }
+
+    private fun setConnectionStatusText(msg: String) {
+        activity.runOnUiThread {
+            activity.tvConnectionStatus.text = msg
         }
     }
 
@@ -115,7 +133,7 @@ class Communicator(
 
     override fun close() {
         stopSending = true
-        this.join()
-        datagramSocket?.close()
+        join()
+        // should also cause the socket to be closed (see `finally` in `run()`)
     }
 }

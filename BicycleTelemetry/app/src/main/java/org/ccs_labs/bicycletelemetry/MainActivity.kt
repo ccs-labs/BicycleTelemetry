@@ -16,12 +16,7 @@ import android.view.MenuItem
 const val DEBUG_TAG : String = "BikeMain"
 
 const val STATE_SERVER_ADDRESS = "serverAddress"
-
-/**
- * For low pass filter:
- * lower alpha should equal smoother movement
- */
-const val ALPHA = 0.5f
+const val STATE_COMMUNICATOR_STARTED = "communicatorStarted"
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private var communicator : Communicator? = null
@@ -34,10 +29,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     /**
      * Indicates whether we should attempt to restore the communicator on resume or not.
      */
-    private var mCommunicatorHadStartingAttempt = false
+    var mCommunicatorStarted = false
 
     val mOrientationAngles = FloatArray(3)
-    val mOrientationStraight = FloatArray(3) { 0f }
+    private val mOrientationStraight = FloatArray(3) { 0f }
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,9 +40,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         setContentView(R.layout.activity_main)
 
         btConnect.setOnClickListener {
-            saveCurrentServerAddress()
-            initializeCommunicator()
-            mCommunicatorHadStartingAttempt = true
+            // `mCommunicatorStarted` will be set from within the communicator itself!
+            if (!mCommunicatorStarted) {
+                saveCurrentServerAddress()
+                initializeCommunicator()
+            } else {
+                communicator?.close()
+            }
         }
 
         btResetStraight.setOnClickListener {
@@ -63,10 +62,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             Won't happen if the app was restarted.
              */
             //Log.d(DEBUG_TAG, "Loading saved instance state")
+            mCommunicatorStarted = savedInstanceState.getBoolean(STATE_COMMUNICATOR_STARTED)
             val t = savedInstanceState.getString(STATE_SERVER_ADDRESS)
             etServerAddress.setText(if (t != null && t.isNotEmpty()) t else getSavedServerAddress())
         } else {
-            //Log.d(DEBUG_TAG, "No saved instance state")
+            /* No saved app instance -> try to load settings from previous sessions, else use defaults: */
             etServerAddress.setText(getSavedServerAddress())
         }
 
@@ -112,6 +112,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             activity = this
         )
         communicator!!.start() // TODO: stop on pause, restart on resume
+        mCommunicatorStarted = true
     }
 
     override fun onResume() {
@@ -136,8 +137,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             )
         }
 
-        //initializeCommunicator()
-        // TODO: only initialize if "Connect" is active
+        if (mCommunicatorStarted) {
+            initializeCommunicator()
+        }
     }
 
     override fun onPause() {
@@ -159,6 +161,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         Save current app state. (Needed e.g. for persistence after device rotation.)
          */
         outState.putString(STATE_SERVER_ADDRESS, etServerAddress.text.toString())
+        outState.putBoolean(STATE_COMMUNICATOR_STARTED, mCommunicatorStarted)
 
         super.onSaveInstanceState(outState)
     }
@@ -186,6 +189,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             normalizeAngleDegrees(Math.toDegrees(getCurrentAzimuth()))
             // Normalize angle again b/c who knows what toDegrees will do to my previously normalized angle in radians.
         )
+        steeringAngleVisualization.currentAzimuth = getCurrentAzimuth().toFloat()
     }
 
     fun normalizeAngleDegrees(deg: Double) : Double {

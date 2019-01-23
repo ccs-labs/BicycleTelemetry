@@ -3,6 +3,7 @@
     <string name="server_address">Server address</string>
     <string name="set_default_server">Set default server address</string>
     <string name="connect">Connect</string>
+    <string name="stop_sending">Stop transmitting</string>
     <string name="steering_angle_title">Steering angle:</string>
     <string name="connection_status_not_connected">Not connected</string>
     <string name="reset_straight">Calibrate straight</string>
@@ -18,5 +19,6 @@
     <string name="send_security_exception">Can\'t send packet: SecurityException: %s</string>
     <string name="send_port_unreachable_exception">Can\'t send packet: port unreachable</string>
     <string name="connection_status_sending">Transmitting packets…</string>
+    <string name="current_steering_angle_initial">0.0°</string>
     <string name="current_steering_angle_format">%.1f°</string>
 </resources>
