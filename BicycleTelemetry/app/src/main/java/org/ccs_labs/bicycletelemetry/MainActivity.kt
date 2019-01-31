@@ -99,6 +99,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             etServerAddress.setText(if (addr != null && addr.isNotEmpty()) addr else getSavedServerAddress())
             val lowPassCutoff = savedInstanceState.getFloat(
                 STATE_LOW_PASS_CUTOFF, getString(R.string.low_pass_cutoff_default).toFloat())
+            etLowPassCutoff.setText(lowPassCutoff.toString())
         } else {
             /* No saved app instance -> try to load settings from previous sessions, else use defaults: */
             etServerAddress.setText(getSavedServerAddress())
@@ -249,7 +250,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             normalizeAngleDegrees(Math.toDegrees(getCurrentAzimuth()))
             // Normalize angle again b/c who knows what toDegrees will do to my previously normalized angle in radians.
         )
-        steeringAngleVisualization.currentAzimuth = getCurrentAzimuth().toFloat()
+        //steeringAngleVisualization.currentAzimuth = getCurrentAzimuth().toFloat()
     }
 
     private fun modulo(a: Double, n: Double): Double {

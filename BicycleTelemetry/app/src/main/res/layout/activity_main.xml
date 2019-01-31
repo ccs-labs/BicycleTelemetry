@@ -49,45 +49,44 @@
             app:layout_constraintTop_toTopOf="parent"
             android:importantForAutofill="no"
             android:text="@string/server_address_default"/>
-        <TextView
-            android:text="@string/current_steering_angle_initial"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/tvCurrentSteeringAngle"
-            app:layout_constraintStart_toEndOf="@id/tvSteeringAngleTitle"
-            android:layout_marginTop="8dp"
-            android:layout_marginStart="8dp"
-            android:layout_marginLeft="8dp"
-            app:layout_constraintTop_toBottomOf="@+id/cbInvertRotation" />
-        <TextView
-            android:text="@string/steering_angle_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/tvSteeringAngleTitle"
-            app:layout_constraintEnd_toStartOf="@+id/tvCurrentSteeringAngle"
-            android:layout_marginEnd="8dp"
-            app:layout_constraintStart_toStartOf="parent"
-            android:layout_marginStart="8dp"
-            android:layout_marginLeft="8dp"
-            android:layout_marginTop="8dp"
-            app:layout_constraintTop_toBottomOf="@+id/cbInvertRotation"/>
-        <TextView
-            android:text="@string/connection_status_not_connected"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/tvConnectionStatus" android:layout_marginTop="8dp"
-            app:layout_constraintTop_toBottomOf="@+id/tvSteeringAngleTitle"
-            app:layout_constraintStart_toStartOf="parent" android:layout_marginLeft="8dp"
-            android:layout_marginStart="8dp"/>
 
         <TextView
-            android:text="@string/tvLowPassOffsetLabel"
+            android:id="@+id/tvCurrentSteeringAngle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:id="@+id/tvLowPassOffsetLabel" android:layout_marginTop="8dp"
-            app:layout_constraintTop_toBottomOf="@+id/tvConnectionStatus"
-            app:layout_constraintStart_toStartOf="parent" android:layout_marginLeft="8dp"
-            android:layout_marginStart="8dp"/>
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/current_steering_angle_initial"
+            android:textAppearance="@style/TextAppearance.AppCompat.Large"
+            app:layout_constraintStart_toEndOf="@id/tvSteeringAngleTitle"
+            app:layout_constraintTop_toBottomOf="@+id/etLowPassCutoff" />
+
+        <TextView
+            android:id="@+id/tvSteeringAngleTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:textColor="@color/lightText"
+            android:text="@string/steering_angle_title"
+            android:textAppearance="@style/TextAppearance.AppCompat.Large"
+            app:layout_constraintEnd_toStartOf="@+id/tvCurrentSteeringAngle"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/etLowPassCutoff" />
+
+        <TextView
+            android:id="@+id/tvLowPassOffsetLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:text="@string/tvLowPassOffsetLabel"
+            android:textAppearance="@style/TextAppearance.AppCompat.Caption"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/cbInvertRotation" />
 
         <CheckBox
             android:id="@+id/cbInvertRotation"
@@ -104,7 +103,7 @@
         <SeekBar
             android:id="@+id/sbLowPassCutoff"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="0dp"
             android:layout_marginStart="8dp"
             android:layout_marginBottom="8dp"
             android:layout_weight="1"
@@ -116,12 +115,12 @@
             app:layout_constraintTop_toBottomOf="@+id/tvLowPassOffsetLabel" />
 
 
-        <org.ccs_labs.bicycletelemetry.SteeringAngleVisualizationView
+        <!--<org.ccs_labs.bicycletelemetry.SteeringAngleVisualizationView
             android:id="@+id/steeringAngleVisualization"
             android:layout_width="match_parent"
             android:layout_height="300dp"
-            android:layout_marginTop="15dp"
-            app:layout_constraintTop_toBottomOf="@+id/sbLowPassCutoff" />
+            android:layout_marginTop="8dp"
+            app:layout_constraintTop_toBottomOf="@+id/etLowPassCutoff" />-->
 
         <EditText
             android:id="@+id/etLowPassCutoff"
@@ -135,5 +134,16 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tvLowPassOffsetLabel"
             tools:ignore="LabelFor" />
+
+        <TextView
+            android:id="@+id/tvConnectionStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/connection_status_not_connected"
+            android:textAppearance="@style/TextAppearance.AppCompat.Body1"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/tvSteeringAngleTitle" />
     </android.support.constraint.ConstraintLayout>
 </ScrollView>
