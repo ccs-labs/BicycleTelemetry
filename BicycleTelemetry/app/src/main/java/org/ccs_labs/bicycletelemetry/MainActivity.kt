@@ -10,12 +10,17 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.SeekBar
+import java.lang.NumberFormatException
 
 const val DEBUG_TAG : String = "BikeMain"
 
 const val STATE_SERVER_ADDRESS = "serverAddress"
+const val STATE_LOW_PASS_CUTOFF = "lowPassCutoff"
 const val STATE_COMMUNICATOR_STARTED = "communicatorStarted"
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
@@ -33,6 +38,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     val mOrientationAngles = FloatArray(3)
     private val mOrientationStraight = FloatArray(3) { 0f }
+    private var mLowPassCutoffFrequency : Float = 0f
+    private var mPreviousLowPassStepTimeMillis : Long = 0
+    private var mLowPassPreviousOutputAngle : Double = 0.0
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,6 +64,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             // TODO: find a more Kotlin way of doing this…
         }
 
+        sbLowPassCutoff.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                etLowPassCutoff.setText((progress / 10.0).toString())
+            }
+        })
+
+        etLowPassCutoff.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+            override fun afterTextChanged(s: Editable?) {
+                try {
+                    val cof = s.toString().toFloat()
+                    sbLowPassCutoff.progress = (cof * 10.0).toInt()
+                    mLowPassCutoffFrequency = cof
+                    saveCurrentLowPassCutoff()
+                } catch (e: NumberFormatException) {}
+            }
+        })
+
         if (savedInstanceState != null) {
             /*
             Restore app state. (Needed e.g. for persistence after device rotation.)
@@ -63,13 +95,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
              */
             //Log.d(DEBUG_TAG, "Loading saved instance state")
             mCommunicatorStarted = savedInstanceState.getBoolean(STATE_COMMUNICATOR_STARTED)
-            val t = savedInstanceState.getString(STATE_SERVER_ADDRESS)
-            etServerAddress.setText(if (t != null && t.isNotEmpty()) t else getSavedServerAddress())
+            val addr = savedInstanceState.getString(STATE_SERVER_ADDRESS)
+            etServerAddress.setText(if (addr != null && addr.isNotEmpty()) addr else getSavedServerAddress())
+            val lowPassCutoff = savedInstanceState.getFloat(
+                STATE_LOW_PASS_CUTOFF, getString(R.string.low_pass_cutoff_default).toFloat())
         } else {
             /* No saved app instance -> try to load settings from previous sessions, else use defaults: */
             etServerAddress.setText(getSavedServerAddress())
+            /* Low-pass filter cutoff frequency.
+             * Setting this value on etLowPassCutoff should cause it to also be applied to the SeekBar
+             * and to the sensor value smoothing process.
+             * See the TextWatcher above. */
+            etLowPassCutoff.setText(getSavedLowPassCutoff().toString())
         }
 
+        mPreviousLowPassStepTimeMillis = System.currentTimeMillis() // initialization
         mSensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
     }
 
@@ -82,6 +122,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         return when (item?.itemId) {
             R.id.action_default_server -> {
                 etServerAddress.setText(getString(R.string.server_address_default))
+                true
+            }
+            R.id.action_default_low_pass_cutoff -> {
+                etLowPassCutoff.setText(getString(R.string.low_pass_cutoff_default))
                 true
             }
             else -> {
@@ -102,6 +146,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         val sharedPref = getPreferences(Context.MODE_PRIVATE) ?: return getString(R.string.server_address_default)
         return sharedPref.getString(
             getString(R.string.sharedprefs_key_server_address), getString(R.string.server_address_default)) as String
+    }
+
+    private fun saveCurrentLowPassCutoff() {
+        val sharedPref = getPreferences(Context.MODE_PRIVATE) ?: return
+        with (sharedPref.edit()) {
+            putFloat(getString(R.string.sharedpref_key_low_pass_cutoff), mLowPassCutoffFrequency)
+            apply()
+        }
+    }
+
+    private fun getSavedLowPassCutoff() : Float {
+        val sharedPref = getPreferences(Context.MODE_PRIVATE) ?:
+            return getString(R.string.low_pass_cutoff_default).toFloat()
+        return sharedPref.getFloat(
+            getString(R.string.sharedpref_key_low_pass_cutoff), getString(R.string.low_pass_cutoff_default).toFloat())
     }
 
     private fun initializeCommunicator() {
@@ -161,6 +220,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         Save current app state. (Needed e.g. for persistence after device rotation.)
          */
         outState.putString(STATE_SERVER_ADDRESS, etServerAddress.text.toString())
+        outState.putFloat(STATE_LOW_PASS_CUTOFF, mLowPassCutoffFrequency)
         outState.putBoolean(STATE_COMMUNICATOR_STARTED, mCommunicatorStarted)
 
         super.onSaveInstanceState(outState)
@@ -192,19 +252,37 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         steeringAngleVisualization.currentAzimuth = getCurrentAzimuth().toFloat()
     }
 
+    private fun modulo(a: Double, n: Double): Double {
+        var r = (a).rem(n)
+        if (r < 0) r += n
+        return r
+    }
+
     fun normalizeAngleDegrees(deg: Double) : Double {
-        return (deg + 180) % 360 - 180
+        return modulo(deg + 180.0, 360.0) - 180.0
     }
 
     fun normalizeAngleRadians(rad: Double) : Double {
-        return (rad + Math.PI) % (2 * Math.PI) - Math.PI
+        return modulo(rad + Math.PI, 2 * Math.PI) - Math.PI
     }
 
     fun getCurrentAzimuth() : Double {
-        return normalizeAngleRadians(
+        val dt = (System.currentTimeMillis() - mPreviousLowPassStepTimeMillis).toDouble() / 1000.0
+        val alpha = ((2.0 * Math.PI * dt * mLowPassCutoffFrequency) /
+                (2.0 * Math.PI * dt * mLowPassCutoffFrequency + 1.0))
+        // new_angle = alpha * new_angle + (1.0 - alpha) * self._low_pass_prev_output_angle
+        var newAngle = normalizeAngleRadians(
             (if (cbInvertRotation.isChecked) -1.0 else 1.0) *
                     (mOrientationAngles[0] - mOrientationStraight[0]).toDouble()
         )
+        if (mLowPassCutoffFrequency > .001) {
+            /* Assume low-pass filter enabled. */
+            newAngle = alpha * newAngle + (1.0 - alpha) * mLowPassPreviousOutputAngle
+            mLowPassPreviousOutputAngle = newAngle
+        }
+
+        mPreviousLowPassStepTimeMillis = System.currentTimeMillis()
+        return normalizeAngleRadians(newAngle)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {

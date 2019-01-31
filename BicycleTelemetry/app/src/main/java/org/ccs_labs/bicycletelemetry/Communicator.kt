@@ -40,7 +40,7 @@ class Communicator(
             while (!Thread.currentThread().isInterrupted && !stopSending) {
                 synchronized(activity.mOrientationAngles) {
                     val azimuth = activity.getCurrentAzimuth()
-                    val msg = "%.5f".format(Locale.ROOT, azimuth).toByteArray(Charsets.UTF_8)
+                    val msg = "%.5f\n".format(Locale.ROOT, azimuth).toByteArray(Charsets.UTF_8)
                     val datagramPacket = DatagramPacket(msg, msg.size)
 
                     try {
