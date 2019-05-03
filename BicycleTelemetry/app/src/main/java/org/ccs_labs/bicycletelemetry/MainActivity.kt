@@ -178,19 +178,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     override fun onResume() {
         super.onResume()
 
-        mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also { accelerometer ->
+//        mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also { accelerometer ->
+//            mSensorManager.registerListener(
+//                this,
+//                accelerometer,
+//                // SensorManager.SENSOR_DELAY_FASTEST,
+//                SensorManager.SENSOR_DELAY_GAME,
+//                SensorManager.SENSOR_DELAY_GAME
+//            )
+//        }
+//        mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also { magneticField ->
+//            mSensorManager.registerListener(
+//                this,
+//                magneticField,
+//                // SensorManager.SENSOR_DELAY_FASTEST,
+//                SensorManager.SENSOR_DELAY_GAME,
+//                SensorManager.SENSOR_DELAY_GAME
+//            )
+//        }
+        mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.also { rotationVector ->
             mSensorManager.registerListener(
                 this,
-                accelerometer,
-                // SensorManager.SENSOR_DELAY_FASTEST,
-                SensorManager.SENSOR_DELAY_GAME,
-                SensorManager.SENSOR_DELAY_GAME
-            )
-        }
-        mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also { magneticField ->
-            mSensorManager.registerListener(
-                this,
-                magneticField,
+                rotationVector,
                 // SensorManager.SENSOR_DELAY_FASTEST,
                 SensorManager.SENSOR_DELAY_GAME,
                 SensorManager.SENSOR_DELAY_GAME
@@ -228,20 +237,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            System.arraycopy(event.values, 0, mAccelerometerReading, 0, mAccelerometerReading.size)
-        } else if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
-            System.arraycopy(event.values, 0, mMagnetometerReading, 0, mMagnetometerReading.size)
-        }
-
         val rotationMatrix = FloatArray(9)
 
-        SensorManager.getRotationMatrix(
-            rotationMatrix,
-            null,
-            mAccelerometerReading,
-            mMagnetometerReading
-        )
+        // Normalize angle again b/c who knows what toDegrees will do to my previously normalized angle in radians.
+        //steeringAngleVisualization.currentAzimuth = getCurrentAzimuth().toFloat()
+        when (event.sensor.type){
+            Sensor.TYPE_ACCELEROMETER ->
+                System.arraycopy(event.values, 0, mAccelerometerReading, 0, mAccelerometerReading.size)
+            Sensor.TYPE_MAGNETIC_FIELD ->
+                System.arraycopy(event.values, 0, mMagnetometerReading, 0, mMagnetometerReading.size)
+            Sensor.TYPE_ROTATION_VECTOR ->
+                SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+            else -> return
+        }
+
+        if (event.sensor.type != Sensor.TYPE_ROTATION_VECTOR) {
+            SensorManager.getRotationMatrix(
+                rotationMatrix,
+                null,
+                mAccelerometerReading,
+                mMagnetometerReading
+            )
+        }
         synchronized(mOrientationAngles) {
             SensorManager.getOrientation(rotationMatrix, mOrientationAngles)
         }
