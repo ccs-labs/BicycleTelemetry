@@ -14,14 +14,17 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.CompoundButton
 import android.widget.SeekBar
-import java.lang.NumberFormatException
+import kotlin.NumberFormatException
 
 const val DEBUG_TAG : String = "BikeMain"
 
 const val STATE_SERVER_ADDRESS = "serverAddress"
 const val STATE_LOW_PASS_CUTOFF = "lowPassCutoff"
 const val STATE_COMMUNICATOR_STARTED = "communicatorStarted"
+const val STATE_TRANSMIT_DEBUG = "transmitDebug"
+const val STATE_GYRO_FUSION = "gyroSensorFusion"
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private var communicator : Communicator? = null
@@ -37,7 +40,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     var mCommunicatorStarted = false
 
     val mOrientationAngles = FloatArray(3)
+    val mOrientationAnglesWithoutGyro = FloatArray(3)
     private val mOrientationStraight = FloatArray(3) { 0f }
+    private val mOrientationStraightWithoutGyro = FloatArray(3) { 0f }
     private var mLowPassCutoffFrequency : Float = 0f
     private var mPreviousLowPassStepTimeMillis : Long = 0
     private var mLowPassPreviousOutputAngle : Double = 0.0
@@ -62,6 +67,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mOrientationStraight[1] = mOrientationAngles[1]
             mOrientationStraight[2] = mOrientationAngles[2]
             // TODO: find a more Kotlin way of doing this…
+            mOrientationStraightWithoutGyro[0] = mOrientationAnglesWithoutGyro[0]
+            mOrientationStraightWithoutGyro[1] = mOrientationAnglesWithoutGyro[1]
+            mOrientationStraightWithoutGyro[2] = mOrientationAnglesWithoutGyro[2]
+        }
+
+        cbGyro.setOnCheckedChangeListener { _: CompoundButton, isChecked: Boolean ->
+            initializeSensors()
+        }
+
+        cbTransmitDebug.setOnCheckedChangeListener { _: CompoundButton, isChecked: Boolean ->
+            initializeSensors()
         }
 
         sbLowPassCutoff.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -100,6 +116,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             val lowPassCutoff = savedInstanceState.getFloat(
                 STATE_LOW_PASS_CUTOFF, getString(R.string.low_pass_cutoff_default).toFloat())
             etLowPassCutoff.setText(lowPassCutoff.toString())
+            cbGyro.isChecked = savedInstanceState.getBoolean(STATE_GYRO_FUSION, true)
+            cbTransmitDebug.isChecked = savedInstanceState.getBoolean(STATE_TRANSMIT_DEBUG, false)
         } else {
             /* No saved app instance -> try to load settings from previous sessions, else use defaults: */
             etServerAddress.setText(getSavedServerAddress())
@@ -108,6 +126,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
              * and to the sensor value smoothing process.
              * See the TextWatcher above. */
             etLowPassCutoff.setText(getSavedLowPassCutoff().toString())
+
+            // TODO: cbGyro, cbTransmitDebug
         }
 
         mPreviousLowPassStepTimeMillis = System.currentTimeMillis() // initialization
@@ -175,36 +195,46 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mCommunicatorStarted = true
     }
 
+    private fun initializeSensors() {
+        mSensorManager.unregisterListener(this)
+
+        if (!cbGyro.isChecked || cbTransmitDebug.isChecked) {
+            mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also { accelerometer ->
+                mSensorManager.registerListener(
+                    this,
+                    accelerometer,
+                    // SensorManager.SENSOR_DELAY_FASTEST,
+                    SensorManager.SENSOR_DELAY_GAME,
+                    SensorManager.SENSOR_DELAY_GAME
+                )
+            }
+            mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also { magneticField ->
+                mSensorManager.registerListener(
+                    this,
+                    magneticField,
+                    // SensorManager.SENSOR_DELAY_FASTEST,
+                    SensorManager.SENSOR_DELAY_GAME,
+                    SensorManager.SENSOR_DELAY_GAME
+                )
+            }
+        }
+        if (cbGyro.isChecked) {
+            mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.also { rotationVector ->
+                mSensorManager.registerListener(
+                    this,
+                    rotationVector,
+                    // SensorManager.SENSOR_DELAY_FASTEST,
+                    SensorManager.SENSOR_DELAY_GAME,
+                    SensorManager.SENSOR_DELAY_GAME
+                )
+            }
+        }
+    }
+
     override fun onResume() {
         super.onResume()
 
-//        mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also { accelerometer ->
-//            mSensorManager.registerListener(
-//                this,
-//                accelerometer,
-//                // SensorManager.SENSOR_DELAY_FASTEST,
-//                SensorManager.SENSOR_DELAY_GAME,
-//                SensorManager.SENSOR_DELAY_GAME
-//            )
-//        }
-//        mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also { magneticField ->
-//            mSensorManager.registerListener(
-//                this,
-//                magneticField,
-//                // SensorManager.SENSOR_DELAY_FASTEST,
-//                SensorManager.SENSOR_DELAY_GAME,
-//                SensorManager.SENSOR_DELAY_GAME
-//            )
-//        }
-        mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.also { rotationVector ->
-            mSensorManager.registerListener(
-                this,
-                rotationVector,
-                // SensorManager.SENSOR_DELAY_FASTEST,
-                SensorManager.SENSOR_DELAY_GAME,
-                SensorManager.SENSOR_DELAY_GAME
-            )
-        }
+        initializeSensors()
 
         if (mCommunicatorStarted) {
             initializeCommunicator()
@@ -232,6 +262,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         outState.putString(STATE_SERVER_ADDRESS, etServerAddress.text.toString())
         outState.putFloat(STATE_LOW_PASS_CUTOFF, mLowPassCutoffFrequency)
         outState.putBoolean(STATE_COMMUNICATOR_STARTED, mCommunicatorStarted)
+        outState.putBoolean(STATE_TRANSMIT_DEBUG, cbTransmitDebug.isChecked)
+        outState.putBoolean(STATE_GYRO_FUSION, cbGyro.isChecked)
 
         super.onSaveInstanceState(outState)
     }
@@ -258,13 +290,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 mAccelerometerReading,
                 mMagnetometerReading
             )
-        }
-        synchronized(mOrientationAngles) {
-            SensorManager.getOrientation(rotationMatrix, mOrientationAngles)
+            synchronized(mOrientationAngles) { // shouldn't matter that it's a different variable
+                SensorManager.getOrientation(rotationMatrix, mOrientationAnglesWithoutGyro)
+            }
+        } else {
+            synchronized(mOrientationAngles) {
+                SensorManager.getOrientation(rotationMatrix, mOrientationAngles)
+            }
         }
 
         tvCurrentSteeringAngle.text = getString(R.string.current_steering_angle_format).format(
-            normalizeAngleDegrees(Math.toDegrees(getCurrentAzimuth()))
+            normalizeAngleDegrees(Math.toDegrees(getCurrentAzimuth(
+                withoutGyro = !cbGyro.isChecked
+            )))
             // Normalize angle again b/c who knows what toDegrees will do to my previously normalized angle in radians.
         )
         //steeringAngleVisualization.currentAzimuth = getCurrentAzimuth().toFloat()
@@ -284,14 +322,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         return modulo(rad + Math.PI, 2 * Math.PI) - Math.PI
     }
 
-    fun getCurrentAzimuth() : Double {
+    fun getCurrentAzimuth(withoutGyro: Boolean = false) : Double {
+        val oriAngles = if (withoutGyro) mOrientationAnglesWithoutGyro else mOrientationAngles
+        val straight = if (withoutGyro) mOrientationStraightWithoutGyro else mOrientationStraight
+
         val dt = (System.currentTimeMillis() - mPreviousLowPassStepTimeMillis).toDouble() / 1000.0
         val alpha = ((2.0 * Math.PI * dt * mLowPassCutoffFrequency) /
                 (2.0 * Math.PI * dt * mLowPassCutoffFrequency + 1.0))
         // new_angle = alpha * new_angle + (1.0 - alpha) * self._low_pass_prev_output_angle
         var newAngle = normalizeAngleRadians(
-            (if (cbInvertRotation.isChecked) -1.0 else 1.0) *
-                    (mOrientationAngles[0] - mOrientationStraight[0]).toDouble()
+            (if (cbInvertRotation.isChecked) -1.0 else 1.0) * (oriAngles[0] - straight[0]).toDouble()
         )
         if (mLowPassCutoffFrequency > .001) {
             /* Assume low-pass filter enabled. */

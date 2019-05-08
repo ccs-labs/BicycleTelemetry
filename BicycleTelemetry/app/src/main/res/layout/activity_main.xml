@@ -86,7 +86,19 @@
             android:textAppearance="@style/TextAppearance.AppCompat.Caption"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/cbInvertRotation" />
+            app:layout_constraintTop_toBottomOf="@+id/cbGyro" />
+
+        <CheckBox
+            android:id="@+id/cbTransmitDebug"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:text="@string/cbTransmitDebug"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btResetStraight" />
 
         <CheckBox
             android:id="@+id/cbInvertRotation"
@@ -98,7 +110,20 @@
             android:text="@string/cbInvertRotation"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/btResetStraight" />
+            app:layout_constraintTop_toBottomOf="@+id/cbTransmitDebug" />
+
+        <CheckBox
+            android:id="@+id/cbGyro"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:checked="true"
+            android:text="@string/cbGyro"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/cbInvertRotation" />
 
         <SeekBar
             android:id="@+id/sbLowPassCutoff"

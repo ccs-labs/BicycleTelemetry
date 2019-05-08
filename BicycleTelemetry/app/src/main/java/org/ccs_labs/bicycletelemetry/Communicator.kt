@@ -38,9 +38,17 @@ class Communicator(
             setConnected(true)
 
             while (!Thread.currentThread().isInterrupted && !stopSending) {
-                synchronized(activity.mOrientationAngles) {
-                    val azimuth = activity.getCurrentAzimuth()
-                    val msg = "%.5f\n".format(Locale.ROOT, azimuth).toByteArray(Charsets.UTF_8)
+                synchronized(activity.mOrientationAngles) { // shouldn't matter that it's a different variable
+                    val msg = if (!activity.cbTransmitDebug.isChecked) {
+                        val azimuth = activity.getCurrentAzimuth(
+                            withoutGyro = !activity.cbGyro.isChecked && !activity.cbTransmitDebug.isChecked
+                        )
+                        "%.5f\n".format(Locale.ROOT, azimuth).toByteArray(Charsets.UTF_8)
+                    } else {
+                        val azimuth = activity.getCurrentAzimuth(withoutGyro = false)
+                        val azWithoutGyro = activity.getCurrentAzimuth(withoutGyro = true)
+                        "%.5f,%.5f\n".format(Locale.ROOT, azimuth, azWithoutGyro).toByteArray(Charsets.UTF_8)
+                    }
                     val datagramPacket = DatagramPacket(msg, msg.size)
 
                     try {
