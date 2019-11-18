@@ -7,11 +7,12 @@
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
         <option name="modules">
           <set>
-            <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/app" />
+            <option value="/run/media/lukas/data/nextcloud/ls-main/ccs/git/BicycleTelemetry/BicycleTelemetry" />
+            <option value="/run/media/lukas/data/nextcloud/ls-main/ccs/git/BicycleTelemetry/BicycleTelemetry/app" />
           </set>
         </option>
         <option name="resolveModulePerSourceSet" value="false" />
+        <option name="testRunner" value="PLATFORM" />
       </GradleProjectSettings>
     </option>
   </component>
