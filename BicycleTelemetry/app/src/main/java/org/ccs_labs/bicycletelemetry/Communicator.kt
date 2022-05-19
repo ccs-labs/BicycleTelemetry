@@ -1,7 +1,7 @@
 package org.ccs_labs.bicycletelemetry
 
 import android.util.Log
-import kotlinx.android.synthetic.main.activity_main.*
+import org.ccs_labs.bicycletelemetry.databinding.ActivityMainBinding
 import java.io.Closeable
 import java.io.IOException
 import java.net.*
@@ -21,7 +21,7 @@ class Communicator(
         try {
             val addressElements = address.split(":")
             if (addressElements.size != 2) {
-                setConnectionStatusText(activity.getString(R.string.invalid_address))
+                activity.setConnectionStatusText(activity.getString(R.string.invalid_address))
                 return
             }
             val host = addressElements[0]
@@ -29,7 +29,7 @@ class Communicator(
             try {
                 port = addressElements[1].toInt()
             } catch (e: NumberFormatException) {
-                setConnectionStatusText(activity.getString(R.string.invalid_port).format(addressElements[1]))
+                activity.setConnectionStatusText(activity.getString(R.string.invalid_port).format(addressElements[1]))
             }
             datagramSocket = DatagramSocket(port!!, InetAddress.getByName("0.0.0.0"))
             datagramSocket!!.connect(InetAddress.getByName(host), port)
@@ -39,9 +39,9 @@ class Communicator(
 
             while (!Thread.currentThread().isInterrupted && !stopSending) {
                 synchronized(activity.mOrientationAngles) { // shouldn't matter that it's a different variable
-                    val msg = if (!activity.cbTransmitDebug.isChecked) {
+                    val msg = if (!activity.getTransmitDebugInfo()) {
                         val azimuth = activity.getCurrentAzimuth(
-                            withoutGyro = !activity.cbGyro.isChecked && !activity.cbTransmitDebug.isChecked
+                            withoutGyro = !activity.getUseGyroscope() && !activity.getTransmitDebugInfo()
                         )
                         "%.5f\n".format(Locale.ROOT, azimuth).toByteArray(Charsets.UTF_8)
                     } else {
@@ -55,18 +55,18 @@ class Communicator(
                         datagramSocket!!.send(datagramPacket)
                     } catch (e: IOException) {
                         // "if an I/O error occurs."
-                        setConnectionStatusText(activity.getString(R.string.send_io_exception).format(e.message))
+                        activity.setConnectionStatusText(activity.getString(R.string.send_io_exception).format(e.message))
                         Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
                         tryReconnect(host, port)
                     } catch (e: SecurityException) {
                         // "if a security manager exists and its checkMulticast or
                         // checkConnect method doesn't allow the send."
-                        setConnectionStatusText(activity.getString(R.string.send_security_exception).format(e.message))
+                        activity.setConnectionStatusText(activity.getString(R.string.send_security_exception).format(e.message))
                         Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
                     } catch (e: PortUnreachableException) {
                         // "may be thrown if the socket is connected to a currently unreachable destination.
                         // Note, there is no guarantee that the exception will be thrown."
-                        setConnectionStatusText(
+                        activity.setConnectionStatusText(
                             activity.getString(R.string.send_port_unreachable_exception))
                         Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
                     }
@@ -83,12 +83,12 @@ class Communicator(
         } catch (e: SocketException) {
             // DatagramSocket constructor:
             // "if the socket could not be opened, or the socket could not bind to the specified local port."
-            setConnectionStatusText(activity.getString(R.string.socket_exception).format(e.message))
+            activity.setConnectionStatusText(activity.getString(R.string.socket_exception).format(e.message))
             Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
         } catch (e: SecurityException) {
             // DatagramSocket constructor:
             // "if a security manager exists and its checkListen method doesn't allow the operation."
-            setConnectionStatusText(activity.getString(R.string.security_exception))
+            activity.setConnectionStatusText(activity.getString(R.string.security_exception))
             Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
         } finally {
             datagramSocket?.close()
@@ -106,27 +106,22 @@ class Communicator(
         activity.mCommunicatorStarted = connected
         activity.runOnUiThread {
             if (connected) {
-                setConnectionStatusText(activity.getString(R.string.connection_status_sending))
-                activity.btConnect.text = activity.getString(R.string.stop_sending)
+                activity.setConnectionStatusText(activity.getString(R.string.connection_status_sending))
+                activity.setConnectButtonText(activity.getString(R.string.stop_sending))
             } else {
-                setConnectionStatusText(activity.getString(R.string.connection_status_not_connected))
-                activity.btConnect.text = activity.getString(R.string.connect)
+                activity.setConnectionStatusText(activity.getString(R.string.connection_status_not_connected))
+                activity.setConnectButtonText(activity.getString(R.string.connect))
             }
         }
     }
 
-    private fun setConnectionStatusText(msg: String) {
-        activity.runOnUiThread {
-            activity.tvConnectionStatus.text = msg
-        }
-    }
 
     private fun tryReconnect(host: String, port: Int) {
         try {
             datagramSocket!!.disconnect()
             datagramSocket!!.connect(InetAddress.getByName(host), port)
             if (datagramSocket!!.isConnected) {
-                setConnectionStatusText(activity.getString(R.string.connection_status_sending))
+                activity.setConnectionStatusText(activity.getString(R.string.connection_status_sending))
             }
         } catch (e: SocketException) {
             // DatagramSocket constructor:

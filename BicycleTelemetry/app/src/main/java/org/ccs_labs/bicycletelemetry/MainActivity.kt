@@ -1,8 +1,5 @@
 package org.ccs_labs.bicycletelemetry
 
-// For view binding (so we don't have to use findViewById all the time):
-import kotlinx.android.synthetic.main.activity_main.*
-
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -16,6 +13,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.widget.CompoundButton
 import android.widget.SeekBar
+import org.ccs_labs.bicycletelemetry.databinding.ActivityMainBinding
 import kotlin.NumberFormatException
 
 const val DEBUG_TAG : String = "BikeMain"
@@ -28,6 +26,11 @@ const val STATE_GYRO_FUSION = "gyroSensorFusion"
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private var communicator : Communicator? = null
+
+    private var _activityMainBinding: ActivityMainBinding? = null
+    // This property is only valid between onCreateView and
+    // onDestroyView.
+    private val activityMainBinding get() = _activityMainBinding!!
 
     // Orientation readings according to https://developer.android.com/guide/topics/sensors/sensors_position
     private lateinit var mSensorManager : SensorManager
@@ -52,7 +55,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        btConnect.setOnClickListener {
+        activityMainBinding.btConnect.setOnClickListener {
             // `mCommunicatorStarted` will be set from within the communicator itself!
             if (!mCommunicatorStarted) {
                 saveCurrentServerAddress()
@@ -62,7 +65,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        btResetStraight.setOnClickListener {
+        activityMainBinding.btResetStraight.setOnClickListener {
             mOrientationStraight[0] = mOrientationAngles[0]
             mOrientationStraight[1] = mOrientationAngles[1]
             mOrientationStraight[2] = mOrientationAngles[2]
@@ -72,32 +75,32 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mOrientationStraightWithoutGyro[2] = mOrientationAnglesWithoutGyro[2]
         }
 
-        cbGyro.setOnCheckedChangeListener { _: CompoundButton, isChecked: Boolean ->
+        activityMainBinding.cbGyro.setOnCheckedChangeListener { _: CompoundButton, _: Boolean ->
             initializeSensors()
         }
 
-        cbTransmitDebug.setOnCheckedChangeListener { _: CompoundButton, isChecked: Boolean ->
+        activityMainBinding.cbTransmitDebug.setOnCheckedChangeListener { _: CompoundButton, _: Boolean ->
             initializeSensors()
         }
 
-        sbLowPassCutoff.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+        activityMainBinding.sbLowPassCutoff.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
 
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (!fromUser) return
-                etLowPassCutoff.setText((progress / 10.0).toString())
+                activityMainBinding.etLowPassCutoff.setText((progress / 10.0).toString())
             }
         })
 
-        etLowPassCutoff.addTextChangedListener(object : TextWatcher {
+        activityMainBinding.etLowPassCutoff.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
 
             override fun afterTextChanged(s: Editable?) {
                 try {
                     val cof = s.toString().toFloat()
-                    sbLowPassCutoff.progress = (cof * 10.0).toInt()
+                    activityMainBinding.sbLowPassCutoff.progress = (cof * 10.0).toInt()
                     mLowPassCutoffFrequency = cof
                     saveCurrentLowPassCutoff()
                 } catch (e: NumberFormatException) {}
@@ -112,20 +115,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             //Log.d(DEBUG_TAG, "Loading saved instance state")
             mCommunicatorStarted = savedInstanceState.getBoolean(STATE_COMMUNICATOR_STARTED)
             val addr = savedInstanceState.getString(STATE_SERVER_ADDRESS)
-            etServerAddress.setText(if (addr != null && addr.isNotEmpty()) addr else getSavedServerAddress())
+            activityMainBinding.etServerAddress.setText(if (addr != null && addr.isNotEmpty()) addr else getSavedServerAddress())
             val lowPassCutoff = savedInstanceState.getFloat(
                 STATE_LOW_PASS_CUTOFF, getString(R.string.low_pass_cutoff_default).toFloat())
-            etLowPassCutoff.setText(lowPassCutoff.toString())
-            cbGyro.isChecked = savedInstanceState.getBoolean(STATE_GYRO_FUSION, true)
-            cbTransmitDebug.isChecked = savedInstanceState.getBoolean(STATE_TRANSMIT_DEBUG, false)
+            activityMainBinding.etLowPassCutoff.setText(lowPassCutoff.toString())
+            activityMainBinding.cbGyro.isChecked = savedInstanceState.getBoolean(STATE_GYRO_FUSION, true)
+            activityMainBinding.cbTransmitDebug.isChecked = savedInstanceState.getBoolean(STATE_TRANSMIT_DEBUG, false)
         } else {
             /* No saved app instance -> try to load settings from previous sessions, else use defaults: */
-            etServerAddress.setText(getSavedServerAddress())
+            activityMainBinding.etServerAddress.setText(getSavedServerAddress())
             /* Low-pass filter cutoff frequency.
              * Setting this value on etLowPassCutoff should cause it to also be applied to the SeekBar
              * and to the sensor value smoothing process.
              * See the TextWatcher above. */
-            etLowPassCutoff.setText(getSavedLowPassCutoff().toString())
+            activityMainBinding.etLowPassCutoff.setText(getSavedLowPassCutoff().toString())
 
             // TODO: cbGyro, cbTransmitDebug
         }
@@ -139,14 +142,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         return true
     }
 
-    override fun onOptionsItemSelected(item: MenuItem?): Boolean {
-        return when (item?.itemId) {
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
             R.id.action_default_server -> {
-                etServerAddress.setText(getString(R.string.server_address_default))
+                activityMainBinding.etServerAddress.setText(getString(R.string.server_address_default))
                 true
             }
             R.id.action_default_low_pass_cutoff -> {
-                etLowPassCutoff.setText(getString(R.string.low_pass_cutoff_default))
+                activityMainBinding.etLowPassCutoff.setText(getString(R.string.low_pass_cutoff_default))
                 true
             }
             else -> {
@@ -155,10 +158,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
+    fun setConnectionStatusText(msg: String) {
+        runOnUiThread {
+            activityMainBinding.tvConnectionStatus.text = msg
+        }
+    }
+
+    fun setConnectButtonText(text: String) {
+        runOnUiThread {
+            activityMainBinding.btConnect.text = text
+        }
+    }
+
+    fun getTransmitDebugInfo(): Boolean {
+        return activityMainBinding.cbTransmitDebug.isChecked
+    }
+
+    fun getUseGyroscope(): Boolean {
+        return activityMainBinding.cbGyro.isChecked
+    }
+
     private fun saveCurrentServerAddress() {
         val sharedPref = getPreferences(Context.MODE_PRIVATE) ?: return
         with (sharedPref.edit()) {
-            putString(getString(R.string.sharedprefs_key_server_address), etServerAddress.text.toString())
+            putString(getString(R.string.sharedprefs_key_server_address), activityMainBinding.etServerAddress.text.toString())
             apply()
         }
     }
@@ -187,7 +210,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun initializeCommunicator() {
         communicator?.close()
         communicator = Communicator(
-            address = etServerAddress.text.toString(),
+            address = activityMainBinding.etServerAddress.text.toString(),
             intervalMillis = 50,
             activity = this
         )
@@ -198,7 +221,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun initializeSensors() {
         mSensorManager.unregisterListener(this)
 
-        if (!cbGyro.isChecked || cbTransmitDebug.isChecked) {
+        if (!activityMainBinding.cbGyro.isChecked || activityMainBinding.cbTransmitDebug.isChecked) {
             mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also { accelerometer ->
                 mSensorManager.registerListener(
                     this,
@@ -218,7 +241,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 )
             }
         }
-        if (cbGyro.isChecked) {
+        if (activityMainBinding.cbGyro.isChecked) {
             mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)?.also { rotationVector ->
                 mSensorManager.registerListener(
                     this,
@@ -259,11 +282,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         /*
         Save current app state. (Needed e.g. for persistence after device rotation.)
          */
-        outState.putString(STATE_SERVER_ADDRESS, etServerAddress.text.toString())
+        outState.putString(STATE_SERVER_ADDRESS, activityMainBinding.etServerAddress.text.toString())
         outState.putFloat(STATE_LOW_PASS_CUTOFF, mLowPassCutoffFrequency)
         outState.putBoolean(STATE_COMMUNICATOR_STARTED, mCommunicatorStarted)
-        outState.putBoolean(STATE_TRANSMIT_DEBUG, cbTransmitDebug.isChecked)
-        outState.putBoolean(STATE_GYRO_FUSION, cbGyro.isChecked)
+        outState.putBoolean(STATE_TRANSMIT_DEBUG, activityMainBinding.cbTransmitDebug.isChecked)
+        outState.putBoolean(STATE_GYRO_FUSION, activityMainBinding.cbGyro.isChecked)
 
         super.onSaveInstanceState(outState)
     }
@@ -299,9 +322,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        tvCurrentSteeringAngle.text = getString(R.string.current_steering_angle_format).format(
+        activityMainBinding.tvCurrentSteeringAngle.text = getString(R.string.current_steering_angle_format).format(
             normalizeAngleDegrees(Math.toDegrees(getCurrentAzimuth(
-                withoutGyro = !cbGyro.isChecked
+                withoutGyro = !activityMainBinding.cbGyro.isChecked
             )))
             // Normalize angle again b/c who knows what toDegrees will do to my previously normalized angle in radians.
         )
@@ -331,7 +354,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 (2.0 * Math.PI * dt * mLowPassCutoffFrequency + 1.0))
         // new_angle = alpha * new_angle + (1.0 - alpha) * self._low_pass_prev_output_angle
         var newAngle = normalizeAngleRadians(
-            (if (cbInvertRotation.isChecked) -1.0 else 1.0) * (oriAngles[0] - straight[0]).toDouble()
+            (if (activityMainBinding.cbInvertRotation.isChecked) -1.0 else 1.0) * (oriAngles[0] - straight[0]).toDouble()
         )
         if (mLowPassCutoffFrequency > .001) {
             /* Assume low-pass filter enabled. */
