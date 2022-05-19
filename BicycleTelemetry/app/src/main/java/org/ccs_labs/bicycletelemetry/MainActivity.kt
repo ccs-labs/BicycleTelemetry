@@ -27,10 +27,7 @@ const val STATE_GYRO_FUSION = "gyroSensorFusion"
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private var communicator : Communicator? = null
 
-    private var _activityMainBinding: ActivityMainBinding? = null
-    // This property is only valid between onCreateView and
-    // onDestroyView.
-    private val activityMainBinding get() = _activityMainBinding!!
+    private lateinit var activityMainBinding: ActivityMainBinding
 
     // Orientation readings according to https://developer.android.com/guide/topics/sensors/sensors_position
     private lateinit var mSensorManager : SensorManager
@@ -53,7 +50,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+
+        activityMainBinding = ActivityMainBinding.inflate(layoutInflater)
+        val view = activityMainBinding.root
+        setContentView(view)
 
         activityMainBinding.btConnect.setOnClickListener {
             // `mCommunicatorStarted` will be set from within the communicator itself!
