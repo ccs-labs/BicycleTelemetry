@@ -2,16 +2,15 @@
     <string name="app_name">Bicycle Telemetry</string>
     <string name="server_address">Server address</string>
     <string name="set_default_server">Load default server address</string>
-    <string name="connect">Connect</string>
-    <string name="stop_sending">Stop transmitting</string>
+    <string name="connect">Start</string>
+    <string name="stop_sending">Stop</string>
     <string name="steering_angle_title">Steering angle:</string>
-    <string name="connection_status_not_connected">Not connected</string>
+    <string name="connection_status_not_connected">Not started</string>
     <string name="reset_straight">Calibrate straight</string>
     <string name="server_address_default">131.234.121.241:15007</string>
     <string name="low_pass_cutoff_default">0.0</string>
     <string name="sharedprefs_id">org.ccs_labs.bicycletelemetry.settings</string>
     <string name="sharedprefs_key_server_address">server_address</string>
-    <string name="sharedpref_key_low_pass_cutoff">low_pass_cutoff</string>
     <string name="cbInvertRotation">Invert rotation</string>
     <string name="invalid_address">Server address must be `[host]:[port]`!</string>
     <string name="invalid_port">Port `%s` is not an integer!</string>
@@ -23,8 +22,4 @@
     <string name="connection_status_sending">Transmitting packets…</string>
     <string name="current_steering_angle_initial">0.0°</string>
     <string name="current_steering_angle_format">%.1f°</string>
-    <string name="tvLowPassOffsetLabel">Low-pass filter cutoff frequency (in Hz, 0 → disabled):</string>
-    <string name="set_default_low_pass_cutoff">Set default low-pass filter cutoff frequency</string>
-    <string name="cbGyro">Also use gyroscope</string>
-    <string name="cbTransmitDebug">Transmit debug data</string>
 </resources>

@@ -3,11 +3,12 @@ package org.ccs_labs.bicycletelemetry
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
-import android.support.graphics.drawable.VectorDrawableCompat
+import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat
 import android.util.AttributeSet
 import android.view.View
 
 /**
+ * This class is not yet used!
  * TODO: document your custom view class.
  */
 class SteeringAngleVisualizationView : View {

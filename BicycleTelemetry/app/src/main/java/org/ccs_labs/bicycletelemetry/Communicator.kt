@@ -1,6 +1,9 @@
 package org.ccs_labs.bicycletelemetry
 
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import org.ccs_labs.bicycletelemetry.databinding.ActivityMainBinding
 import java.io.Closeable
 import java.io.IOException
@@ -12,87 +15,105 @@ const val COMMUNICATOR_DEBUG_TAG : String = "BikeCommunicator"
 class Communicator(
     private val address: String,
     private val intervalMillis: Long,
-    private val activity: MainActivity
-) : Closeable, Thread() {
+    private val worker: SteeringSensorWorker,
+) : Closeable {
     var stopSending = false
     private var datagramSocket : DatagramSocket? = null
 
-    override fun run() {
-        try {
-            val addressElements = address.split(":")
-            if (addressElements.size != 2) {
-                activity.setConnectionStatusText(activity.getString(R.string.invalid_address))
-                return
-            }
-            val host = addressElements[0]
-            var port: Int? = null
+    suspend fun run() {
+        withContext(Dispatchers.IO) {
             try {
-                port = addressElements[1].toInt()
-            } catch (e: NumberFormatException) {
-                activity.setConnectionStatusText(activity.getString(R.string.invalid_port).format(addressElements[1]))
-            }
-            datagramSocket = DatagramSocket(port!!, InetAddress.getByName("0.0.0.0"))
-            datagramSocket!!.connect(InetAddress.getByName(host), port)
-            var previousTime: Long = System.currentTimeMillis()
-
-            setConnected(true)
-
-            while (!Thread.currentThread().isInterrupted && !stopSending) {
-                synchronized(activity.mOrientationAngles) { // shouldn't matter that it's a different variable
-                    val msg = if (!activity.getTransmitDebugInfo()) {
-                        val azimuth = activity.getCurrentAzimuth(
-                            withoutGyro = !activity.getUseGyroscope() && !activity.getTransmitDebugInfo()
-                        )
-                        "%.5f\n".format(Locale.ROOT, azimuth).toByteArray(Charsets.UTF_8)
-                    } else {
-                        val azimuth = activity.getCurrentAzimuth(withoutGyro = false)
-                        val azWithoutGyro = activity.getCurrentAzimuth(withoutGyro = true)
-                        "%.5f,%.5f\n".format(Locale.ROOT, azimuth, azWithoutGyro).toByteArray(Charsets.UTF_8)
-                    }
-                    val datagramPacket = DatagramPacket(msg, msg.size)
-
-                    try {
-                        datagramSocket!!.send(datagramPacket)
-                    } catch (e: IOException) {
-                        // "if an I/O error occurs."
-                        activity.setConnectionStatusText(activity.getString(R.string.send_io_exception).format(e.message))
-                        Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
-                        tryReconnect(host, port)
-                    } catch (e: SecurityException) {
-                        // "if a security manager exists and its checkMulticast or
-                        // checkConnect method doesn't allow the send."
-                        activity.setConnectionStatusText(activity.getString(R.string.send_security_exception).format(e.message))
-                        Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
-                    } catch (e: PortUnreachableException) {
-                        // "may be thrown if the socket is connected to a currently unreachable destination.
-                        // Note, there is no guarantee that the exception will be thrown."
-                        activity.setConnectionStatusText(
-                            activity.getString(R.string.send_port_unreachable_exception))
-                        Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
-                    }
+                val addressElements = address.split(":")
+                if (addressElements.size != 2) {
+                    activity.setConnectionStatusText(activity.getString(R.string.invalid_address))
+                    return
                 }
+                val host = addressElements[0]
+                var port: Int? = null
+                try {
+                    port = addressElements[1].toInt()
+                } catch (e: NumberFormatException) {
+                    activity.setConnectionStatusText(
+                        activity.getString(R.string.invalid_port).format(addressElements[1])
+                    )
+                }
+                datagramSocket = DatagramSocket(port!!, InetAddress.getByName("0.0.0.0"))
+                datagramSocket!!.connect(InetAddress.getByName(host), port)
+                var previousTime: Long = System.currentTimeMillis()
 
-                //Log.d(COMMUNICATOR_DEBUG_TAG, "Sleeping for " +
-                //        Math.max(0, intervalMillis - (System.currentTimeMillis() - previousTime)).toString() +
-                //        " ms, delta = " + (System.currentTimeMillis() - previousTime).toString() + " ms"
-                //)
-                Thread.sleep(Math.max(0, intervalMillis - (System.currentTimeMillis() - previousTime)))
-                //Thread.sleep(intervalMillis)
-                previousTime = System.currentTimeMillis()
+                setConnected(true)
+
+                while (!Thread.currentThread().isInterrupted && !stopSending) {
+                    synchronized(activity.mOrientationAngles) { // shouldn't matter that it's a different variable
+                        val msg = if (!activity.getTransmitDebugInfo()) {
+                            val azimuth = activity.getCurrentAzimuth(
+                                withoutGyro = !activity.getUseGyroscope() && !activity.getTransmitDebugInfo()
+                            )
+                            "%.5f\n".format(Locale.ROOT, azimuth).toByteArray(Charsets.UTF_8)
+                        } else {
+                            val azimuth = activity.getCurrentAzimuth(withoutGyro = false)
+                            val azWithoutGyro = activity.getCurrentAzimuth(withoutGyro = true)
+                            "%.5f,%.5f\n".format(Locale.ROOT, azimuth, azWithoutGyro)
+                                .toByteArray(Charsets.UTF_8)
+                        }
+                        val datagramPacket = DatagramPacket(msg, msg.size)
+
+                        try {
+                            datagramSocket!!.send(datagramPacket)
+                        } catch (e: IOException) {
+                            // "if an I/O error occurs."
+                            setConnectionStatusText(
+                                activity.getString(R.string.send_io_exception).format(e.message)
+                            )
+                            Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
+                            tryReconnect(host, port)
+                        } catch (e: SecurityException) {
+                            // "if a security manager exists and its checkMulticast or
+                            // checkConnect method doesn't allow the send."
+                            setConnectionStatusText(
+                                activity.getString(R.string.send_security_exception)
+                                    .format(e.message)
+                            )
+                            Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
+                        } catch (e: PortUnreachableException) {
+                            // "may be thrown if the socket is connected to a currently unreachable destination.
+                            // Note, there is no guarantee that the exception will be thrown."
+                            setConnectionStatusText(
+                                activity.getString(R.string.send_port_unreachable_exception)
+                            )
+                            Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
+                        }
+                    }
+
+                    //Log.d(COMMUNICATOR_DEBUG_TAG, "Sleeping for " +
+                    //        Math.max(0, intervalMillis - (System.currentTimeMillis() - previousTime)).toString() +
+                    //        " ms, delta = " + (System.currentTimeMillis() - previousTime).toString() + " ms"
+                    //)
+                    delay(
+                        Math.max(
+                            0,
+                            intervalMillis - (System.currentTimeMillis() - previousTime)
+                        )
+                    )
+                    //Thread.sleep(intervalMillis)
+                    previousTime = System.currentTimeMillis()
+                }
+            } catch (e: SocketException) {
+                // DatagramSocket constructor:
+                // "if the socket could not be opened, or the socket could not bind to the specified local port."
+                setConnectionStatusText(
+                    activity.getString(R.string.socket_exception).format(e.message)
+                )
+                Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
+            } catch (e: SecurityException) {
+                // DatagramSocket constructor:
+                // "if a security manager exists and its checkListen method doesn't allow the operation."
+                setConnectionStatusText(activity.getString(R.string.security_exception))
+                Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
+            } finally {
+                datagramSocket?.close()
+                setConnected(false)
             }
-        } catch (e: SocketException) {
-            // DatagramSocket constructor:
-            // "if the socket could not be opened, or the socket could not bind to the specified local port."
-            activity.setConnectionStatusText(activity.getString(R.string.socket_exception).format(e.message))
-            Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
-        } catch (e: SecurityException) {
-            // DatagramSocket constructor:
-            // "if a security manager exists and its checkListen method doesn't allow the operation."
-            activity.setConnectionStatusText(activity.getString(R.string.security_exception))
-            Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
-        } finally {
-            datagramSocket?.close()
-            setConnected(false)
         }
     }
 
@@ -106,10 +127,10 @@ class Communicator(
         activity.mCommunicatorStarted = connected
         activity.runOnUiThread {
             if (connected) {
-                activity.setConnectionStatusText(activity.getString(R.string.connection_status_sending))
+                setConnectionStatusText(activity.getString(R.string.connection_status_sending))
                 activity.setConnectButtonText(activity.getString(R.string.stop_sending))
             } else {
-                activity.setConnectionStatusText(activity.getString(R.string.connection_status_not_connected))
+                setConnectionStatusText(activity.getString(R.string.connection_status_not_connected))
                 activity.setConnectButtonText(activity.getString(R.string.connect))
             }
         }
@@ -121,7 +142,7 @@ class Communicator(
             datagramSocket!!.disconnect()
             datagramSocket!!.connect(InetAddress.getByName(host), port)
             if (datagramSocket!!.isConnected) {
-                activity.setConnectionStatusText(activity.getString(R.string.connection_status_sending))
+                setConnectionStatusText(activity.getString(R.string.connection_status_sending))
             }
         } catch (e: SocketException) {
             // DatagramSocket constructor:
@@ -132,6 +153,11 @@ class Communicator(
             // setConnectionStatusText(activity.getString(R.string.socket_exception).format(e.message))
             Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
         }
+    }
+
+    private fun setConnectionStatusText(text: String) {
+        // TODO: use worker output or try to get access to the view model from
+        //  within a worker somehow
     }
 
     override fun close() {
