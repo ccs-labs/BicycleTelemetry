@@ -38,10 +38,6 @@ class MainActivity : AppCompatActivity() {
     // the SteeringDataModel view model, if I understand correctly:
     // https://stackoverflow.com/a/54313573/1018176
 
-    val mOrientationAngles = FloatArray(3)
-    val mOrientationAnglesWithoutGyro = FloatArray(3)
-    private val mOrientationStraight = FloatArray(3) { 0f }
-    private val mOrientationStraightWithoutGyro = FloatArray(3) { 0f }
     private var mPreviousLowPassStepTimeMillis : Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,13 +52,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         activityMainBinding.btResetStraight.setOnClickListener {
-            mOrientationStraight[0] = mOrientationAngles[0]
-            mOrientationStraight[1] = mOrientationAngles[1]
-            mOrientationStraight[2] = mOrientationAngles[2]
-            // TODO: find a more Kotlin way of doing this…
-            mOrientationStraightWithoutGyro[0] = mOrientationAnglesWithoutGyro[0]
-            mOrientationStraightWithoutGyro[1] = mOrientationAnglesWithoutGyro[1]
-            mOrientationStraightWithoutGyro[2] = mOrientationAnglesWithoutGyro[2]
+            mSteeringDataModel.setStraight()
         }
 
         if (savedInstanceState != null) {
@@ -113,6 +103,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // TODO: use!
     private fun saveCurrentServerAddress() {
         val sharedPref = getPreferences(Context.MODE_PRIVATE) ?: return
         with (sharedPref.edit()) {
@@ -126,7 +117,6 @@ class MainActivity : AppCompatActivity() {
         return sharedPref.getString(
             getString(R.string.sharedprefs_key_server_address), getString(R.string.server_address_default)) as String
     }
-
 
     override fun onResume() {
         super.onResume()
@@ -148,23 +138,5 @@ class MainActivity : AppCompatActivity() {
         outState.putBoolean(STATE_COMMUNICATOR_STARTED, mCommunicatorStarted)
 
         super.onSaveInstanceState(outState)
-    }
-
-    private fun modulo(a: Double, n: Double): Double {
-        var r = (a).rem(n)
-        if (r < 0) r += n
-        return r
-    }
-
-    fun normalizeAngleDegrees(deg: Double) : Double {
-        return modulo(deg + 180.0, 360.0) - 180.0
-    }
-
-    fun normalizeAngleRadians(rad: Double) : Double {
-        return modulo(rad + Math.PI, 2 * Math.PI) - Math.PI
-    }
-
-    fun getCurrentAzimuth(withoutGyro: Boolean = false) : Double {
-        TODO("Get current azimuth from worker")
     }
 }

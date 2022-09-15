@@ -55,23 +55,18 @@ class SteeringDataModel(application: Application) : AndroidViewModel(application
 
 
         workManager.getWorkInfoByIdLiveData(workRequest.id)
-            .observe(this, Observer { workInfo: WorkInfo? ->
+            .observe(getApplication(), Observer { workInfo: WorkInfo? ->
                 if (workInfo != null) {
                     val progress = workInfo.progress
                     currentAzimuth.value = progress.getDouble(
                         SteeringAngleDataKey,
-                        0.0
+                        currentAzimuth.value ?: 0.0
                     )
                 }
             })
-        // `mCommunicatorStarted` will be set from within the communicator itself!
-        if (!mCommunicatorStarted) {
-            saveCurrentServerAddress()
-            // TODO: trigger the following in worker:
-            // initializeCommunicator()
-        } else {
-            // TODO: trigger the following in worker:
-            // communicator?.close()
-        }
+    }
+
+    internal fun setStraight() {
+        workManager.
     }
 }

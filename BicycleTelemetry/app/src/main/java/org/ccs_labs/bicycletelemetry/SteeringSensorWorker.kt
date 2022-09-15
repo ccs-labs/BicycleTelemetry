@@ -12,6 +12,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class SteeringSensorWorker(
     appContext: Context,
@@ -20,8 +22,14 @@ class SteeringSensorWorker(
     CoroutineWorker(appContext, workerParams),
     SensorEventListener {
 
+    /**
+     * Key tags for using setProgress() to notify the main activity etc.
+     * of status and sensor values.
+     */
     companion object {
         const val SteeringAngleDataKey = "SteeringAngle"
+        const val TransmissionException = "TransmissionException"
+        const val TransmissionStatus = "TransmissionStatus"
     }
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -38,9 +46,11 @@ class SteeringSensorWorker(
 
     // Orientation readings according to https://developer.android.com/guide/topics/sensors/sensors_position
     private lateinit var mSensorManager: SensorManager
+    internal var mUseGyroscope: Boolean = true
+    internal val mSensorDataMutex: Mutex = Mutex()
     private val mAccelerometerReading = FloatArray(3)
     private val mMagnetometerReading = FloatArray(3)
-    private val mOrientationAngles = FloatArray(3)
+    internal val mOrientationAngles = FloatArray(3)
     private val mOrientationAnglesWithoutGyro = FloatArray(3)
     private val mOrientationStraight = FloatArray(3) { 0f }
     private val mOrientationStraightWithoutGyro = FloatArray(3) { 0f }
@@ -49,18 +59,13 @@ class SteeringSensorWorker(
     override suspend fun doWork(): Result {
         mSensorManager =
             applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        mCommunicator.start()
-        // Let mSensorManager and mCommunicator do their thing while we
-        // wait in this thread…
-        withContext(Dispatchers.IO) {
-            mCommunicator.join()
-        }
-        mCommunicator.close()
+        mCommunicator.transmitBlocking()
         return Result.success()
     }
 
     override fun onSensorChanged(p0: SensorEvent?) {
-        // Process all events in a coroutine so we're able to call setProgress…
+        // Process all events in a coroutine so we're able to call setProgress()…
+        // See processSensorEvents()
         p0?.let {
             runBlocking {
                 sensorEvents.send(it)
@@ -69,6 +74,10 @@ class SteeringSensorWorker(
     }
 
     private fun processSensorEvents() = coroutineScope.launch {
+        // Running in a coroutine so we're able to call setProgress()
+        // to notify listeners of this worker, mainly to display the
+        // current steering angle in the UI.
+        initializeSensors(false, false)
         sensorEvents.consumeEach(fun (it: SensorEvent) {
             val rotationMatrix = FloatArray(9)
 
@@ -104,11 +113,11 @@ class SteeringSensorWorker(
                     mAccelerometerReading,
                     mMagnetometerReading
                 )
-                synchronized(mOrientationAngles) { // shouldn't matter that it's a different variable
+                mSensorDataMutex.withLock {
                     SensorManager.getOrientation(rotationMatrix, mOrientationAnglesWithoutGyro)
                 }
             } else {
-                synchronized(mOrientationAngles) {
+                mSensorDataMutex.withLock {
                     SensorManager.getOrientation(rotationMatrix, mOrientationAngles)
                 }
             }
@@ -119,8 +128,8 @@ class SteeringSensorWorker(
                 normalizeAngleDegrees(Math.toDegrees(getCurrentAzimuth(false)))
                 // Normalize angle again b/c who knows what toDegrees will do to
                 // my previously normalized angle in radians.
-            )
-         */
+               )
+             */
             //steeringAngleVisualization.currentAzimuth = getCurrentAzimuth().toFloat()
         })
     }
@@ -178,11 +187,21 @@ class SteeringSensorWorker(
         return modulo(deg + 180.0, 360.0) - 180.0
     }
 
+    // TODO: use
+    private fun resetStraight() {
+        mOrientationStraight[0] = mOrientationAngles[0]
+        mOrientationStraight[1] = mOrientationAngles[1]
+        mOrientationStraight[2] = mOrientationAngles[2]
+        mOrientationStraightWithoutGyro[0] = mOrientationAnglesWithoutGyro[0]
+        mOrientationStraightWithoutGyro[1] = mOrientationAnglesWithoutGyro[1]
+        mOrientationStraightWithoutGyro[2] = mOrientationAnglesWithoutGyro[2]
+    }
+
     private fun normalizeAngleRadians(rad: Double) : Double {
         return modulo(rad + Math.PI, 2 * Math.PI) - Math.PI
     }
 
-    private fun getCurrentAzimuth(withoutGyro: Boolean = false) : Double {
+    internal fun getCurrentAzimuth(withoutGyro: Boolean = false) : Double {
         val oriAngles = if (withoutGyro) mOrientationAnglesWithoutGyro else mOrientationAngles
         val straight = if (withoutGyro) mOrientationStraightWithoutGyro else mOrientationStraight
 
