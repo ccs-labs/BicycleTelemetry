@@ -1,13 +1,21 @@
 package org.ccs_labs.bicycletelemetry
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
 import android.content.Context
+import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Binder
+import android.os.IBinder
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationCompat.Builder
+import androidx.lifecycle.MutableLiveData
 import androidx.work.WorkerParameters
-import androidx.work.CoroutineWorker
-import androidx.work.workDataOf
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -15,23 +23,32 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class SteeringSensorWorker(
+const val TAG_STEERING_SENSOR_SERVICE = "STEERING_SENSOR_SERVICE"
+const val ACTION_START_FOREGROUND_SERVICE = "ACTION_START_FOREGROUND_SERVICE"
+const val ACTION_STOP_FOREGROUND_SERVICE = "ACTION_STOP_FOREGROUND_SERVICE"
+const val ACTION_RESET_STRAIGHT = "ACTION_RESET_STRAIGHT"
+const val STEERING_SENSOR_NOTIFICATION_ID = "STEERING_SENSOR_NOTIFICATION_ID"
+
+class SteeringSensorService(
     appContext: Context,
     workerParams: WorkerParameters
 ):
-    CoroutineWorker(appContext, workerParams),
+    Service(),
     SensorEventListener {
 
-    /**
-     * Key tags for using setProgress() to notify the main activity etc.
-     * of status and sensor values.
-     */
-    companion object {
-        const val SteeringAngleDataKey = "SteeringAngle"
-        const val TransmissionException = "TransmissionException"
-        const val TransmissionStatus = "TransmissionStatus"
+    inner class SteeringSensorServiceBinder: Binder() {
+        // Return this instance of MyService so clients can call public methods
+        val service: SteeringSensorService
+            // Return this instance of MyService so clients can call public methods
+            get() = this@SteeringSensorService
     }
 
+    val currentAzimuthDeg: MutableLiveData<Double> = MutableLiveData<Double>(0.0)
+    val statusText: MutableLiveData<String> = MutableLiveData<String>("")
+    val stopped: MutableLiveData<Boolean> = MutableLiveData<Boolean>(true)
+    val serverAddress: MutableLiveData<String> = MutableLiveData<String>("") // TODO: set in Activity
+
+    private val mBinder = SteeringSensorServiceBinder()
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
     private val sensorEvents = Channel<SensorEvent>(
         capacity=2, // even 1 might be fine; we don't need old information
@@ -41,7 +58,7 @@ class SteeringSensorWorker(
     private val mCommunicator = Communicator(
         address = workerParams.inputData.getString("ADDRESS").orEmpty(),
         intervalMillis = 50,
-        worker = this,
+        steeringSensorService = this,
     )
 
     // Orientation readings according to https://developer.android.com/guide/topics/sensors/sensors_position
@@ -55,13 +72,6 @@ class SteeringSensorWorker(
     private val mOrientationStraight = FloatArray(3) { 0f }
     private val mOrientationStraightWithoutGyro = FloatArray(3) { 0f }
     private var mPreviousLowPassStepTimeMillis : Long = 0
-
-    override suspend fun doWork(): Result {
-        mSensorManager =
-            applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        mCommunicator.transmitBlocking()
-        return Result.success()
-    }
 
     override fun onSensorChanged(p0: SensorEvent?) {
         // Process all events in a coroutine so we're able to call setProgress()…
@@ -81,8 +91,6 @@ class SteeringSensorWorker(
         sensorEvents.consumeEach(fun (it: SensorEvent) {
             val rotationMatrix = FloatArray(9)
 
-            // Normalize angle again b/c who knows what toDegrees will do to my previously normalized angle in radians.
-            //steeringAngleVisualization.currentAzimuth = getCurrentAzimuth().toFloat()
             // TODO: handle possible NullPointerExceptions
             when (it.sensor?.type) {
                 Sensor.TYPE_ACCELEROMETER ->
@@ -122,15 +130,11 @@ class SteeringSensorWorker(
                 }
             }
 
-            setProgress(workDataOf(SteeringAngleDataKey to getCurrentAzimuth(false)))
-            /* mSteeringDataModel.statusText.value = applicationContext
-            .getString(R.string.current_steering_angle_format).format(
-                normalizeAngleDegrees(Math.toDegrees(getCurrentAzimuth(false)))
+            currentAzimuthDeg.value = normalizeAngleDegrees(
+                Math.toDegrees(getCurrentAzimuthRad(false))
                 // Normalize angle again b/c who knows what toDegrees will do to
                 // my previously normalized angle in radians.
-               )
-             */
-            //steeringAngleVisualization.currentAzimuth = getCurrentAzimuth().toFloat()
+            )
         })
     }
 
@@ -187,8 +191,7 @@ class SteeringSensorWorker(
         return modulo(deg + 180.0, 360.0) - 180.0
     }
 
-    // TODO: use
-    private fun resetStraight() {
+    internal fun resetStraight() {
         mOrientationStraight[0] = mOrientationAngles[0]
         mOrientationStraight[1] = mOrientationAngles[1]
         mOrientationStraight[2] = mOrientationAngles[2]
@@ -201,7 +204,7 @@ class SteeringSensorWorker(
         return modulo(rad + Math.PI, 2 * Math.PI) - Math.PI
     }
 
-    internal fun getCurrentAzimuth(withoutGyro: Boolean = false) : Double {
+    internal fun getCurrentAzimuthRad(withoutGyro: Boolean = false) : Double {
         val oriAngles = if (withoutGyro) mOrientationAnglesWithoutGyro else mOrientationAngles
         val straight = if (withoutGyro) mOrientationStraightWithoutGyro else mOrientationStraight
 
@@ -213,4 +216,107 @@ class SteeringSensorWorker(
         return normalizeAngleRadians(newAngle)
     }
 
+    // Called when another class intends to bind to this service for
+    // back-and-forth communication.
+    override fun onBind(p0: Intent?): IBinder {
+        return mBinder
+    }
+
+    // Called when the service is started,
+    // i.e., after onCreate().
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent != null) {
+            when (intent.action) {
+                ACTION_START_FOREGROUND_SERVICE -> {
+                    startForegroundService()
+                }
+                ACTION_STOP_FOREGROUND_SERVICE -> {
+                    stopForegroundService()
+                }
+                ACTION_RESET_STRAIGHT -> {
+                    resetStraight()
+                }
+            }
+        }
+        // If service killed, after returning from here, restart
+        return START_STICKY
+    }
+
+    private fun createNotificationChannel() {
+        // Required before any notification can be shown!
+        val channel = NotificationChannel(
+            STEERING_SENSOR_NOTIFICATION_ID,
+            getString(R.string.channel_name),
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = getString(R.string.channel_description)
+        }
+        // Register the channel with the system
+        val notificationManager: NotificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
+    }
+
+    private fun startForegroundService() {
+        // Intent for tapping the "Reset straight" button in the notification:
+        val resetStraightIntent = Intent(ACTION_RESET_STRAIGHT)
+        val resetStraightPendingIntent = PendingIntent.getBroadcast(
+            this, 0, resetStraightIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Intent for tapping the "Stop" button in the notification:
+        val stopIntent = Intent(ACTION_STOP_FOREGROUND_SERVICE)
+        val stopPendingIntent = PendingIntent.getBroadcast(
+            this, 0, stopIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Intent for tapping the notification itself:
+        val contentIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val contentPendingIntent: PendingIntent = PendingIntent.getActivity(
+            this, 0, contentIntent, PendingIntent.FLAG_IMMUTABLE)
+
+        // Build the notification for this service:
+        val notification = Builder(this, STEERING_SENSOR_NOTIFICATION_ID)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle(getString(R.string.notification_content))
+            .setContentIntent(contentPendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .addAction(
+                R.drawable.vec_reset_straight,
+                getString(R.string.reset_straight),
+                resetStraightPendingIntent
+            )
+            .addAction(
+                R.drawable.stop_materialdesignicons,
+                getString(R.string.stop_sending),
+                stopPendingIntent
+            )
+            .build()
+
+        startForeground(STEERING_SENSOR_NOTIFICATION_ID.hashCode(), notification)
+
+        mSensorManager =
+            applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        coroutineScope.launch {
+            mCommunicator.transmitBlocking()
+        }
+    }
+
+    private fun stopForegroundService() {
+        // TODO: cleanup?
+        stopSelf()
+    }
+
+    // Called when an instance of this service is created,
+    // i.e., before onStartCommand().
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+    }
+
+    override fun onDestroy() {
+        // nothing to do here yet
+    }
 }

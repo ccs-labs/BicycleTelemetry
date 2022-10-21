@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.work.workDataOf
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock
-import org.ccs_labs.bicycletelemetry.databinding.ActivityMainBinding
 import java.io.Closeable
 import java.io.IOException
 import java.net.*
@@ -16,7 +15,7 @@ const val COMMUNICATOR_DEBUG_TAG : String = "BikeCommunicator"
 class Communicator(
     private val address: String,
     private val intervalMillis: Long,
-    private val worker: SteeringSensorWorker,
+    private val steeringSensorService: SteeringSensorService,
     private val transmitDebugInfo: Boolean = false,
 ) : Closeable {
 
@@ -69,15 +68,15 @@ class Communicator(
             // setConnected(true)
 
             while (!Thread.currentThread().isInterrupted && !stopSending) {
-                worker.mSensorDataMutex.withLock {
+                steeringSensorService.mSensorDataMutex.withLock {
                     val msg = if (!transmitDebugInfo) {
-                        val azimuth = worker.getCurrentAzimuth(
-                            withoutGyro = !worker.mUseGyroscope && !transmitDebugInfo
+                        val azimuth = steeringSensorService.getCurrentAzimuthRad(
+                            withoutGyro = !steeringSensorService.mUseGyroscope && !transmitDebugInfo
                         )
                         "%.5f\n".format(Locale.ROOT, azimuth).toByteArray(Charsets.UTF_8)
                     } else {
-                        val azimuth = worker.getCurrentAzimuth(withoutGyro = false)
-                        val azWithoutGyro = worker.getCurrentAzimuth(withoutGyro = true)
+                        val azimuth = steeringSensorService.getCurrentAzimuthRad(withoutGyro = false)
+                        val azWithoutGyro = steeringSensorService.getCurrentAzimuthRad(withoutGyro = true)
                         "%.5f,%.5f\n".format(Locale.ROOT, azimuth, azWithoutGyro)
                             .toByteArray(Charsets.UTF_8)
                     }
@@ -87,20 +86,19 @@ class Communicator(
                         datagramSocket!!.send(datagramPacket)
                     } catch (e: IOException) {
                         // "if an I/O error occurs."
-                        worker.setProgress(workDataOf(
-                            SteeringSensorWorker.TransmissionException to e
-                        ))
+                        steeringSensorService.statusText.value = steeringSensorService.getString(
+                            R.string.send_io_exception
+                        ).format(e)
                         // setConnectionStatusText(
                         //     activity.getString(R.string.send_io_exception).format(e.message)
                         // )
                         Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
-                        tryReconnect(host, port)
                     } catch (e: SecurityException) {
                         // "if a security manager exists and its checkMulticast or
                         // checkConnect method doesn't allow the send."
-                        worker.setProgress(workDataOf(
-                            SteeringSensorWorker.TransmissionException to e
-                        ))
+                        steeringSensorService.statusText.value = steeringSensorService.getString(
+                            R.string.send_security_exception
+                        ).format(e)
                         // setConnectionStatusText(
                         //     activity.getString(R.string.send_security_exception)
                         //         .format(e.message)
@@ -109,14 +107,16 @@ class Communicator(
                     } catch (e: PortUnreachableException) {
                         // "may be thrown if the socket is connected to a currently unreachable destination.
                         // Note, there is no guarantee that the exception will be thrown."
-                        worker.setProgress(workDataOf(
-                            SteeringSensorWorker.TransmissionException to e
-                        ))
+                        steeringSensorService.statusText.value = steeringSensorService.getString(
+                            R.string.send_port_unreachable_exception
+                        )
                         // setConnectionStatusText(
                         //     activity.getString(R.string.send_port_unreachable_exception)
                         // )
                         Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
                     }
+
+                    tryReconnect(host, port)
                 }
 
                 delay(max(
@@ -171,11 +171,9 @@ class Communicator(
             datagramSocket!!.disconnect()
             datagramSocket!!.connect(InetAddress.getByName(host), port)
             if (datagramSocket!!.isConnected) {
-                worker.setProgress(workDataOf(
-                    SteeringSensorWorker.TransmissionStatus to worker.applicationContext.getString(
-                        R.string.connection_status_sending
-                    )
-                ))
+                steeringSensorService.statusText.value = steeringSensorService.getString(
+                    R.string.connection_status_sending
+                )
             }
         } catch (e: SocketException) {
             // DatagramSocket constructor:
@@ -186,11 +184,6 @@ class Communicator(
             // setConnectionStatusText(activity.getString(R.string.socket_exception).format(e.message))
             Log.e(COMMUNICATOR_DEBUG_TAG, e.toString())
         }
-    }
-
-    private fun setConnectionStatusText(text: String) {
-        // TODO: use worker output or try to get access to the view model from
-        //  within a worker somehow
     }
 
     override fun close() {

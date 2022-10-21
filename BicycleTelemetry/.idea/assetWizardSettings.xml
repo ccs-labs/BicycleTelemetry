@@ -304,8 +304,8 @@
                         <option name="values">
                           <map>
                             <entry key="assetSourceType" value="FILE" />
-                            <entry key="outputName" value="ic_launcher" />
-                            <entry key="sourceFile" value="$PROJECT_DIR$/../icon.svg" />
+                            <entry key="outputName" value="vec_reset_straight" />
+                            <entry key="sourceFile" value="$PROJECT_DIR$/../custom_resources/reset_straight.optimized-plain.svg" />
                           </map>
                         </option>
                       </PersistentState>

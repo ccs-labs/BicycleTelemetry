@@ -22,4 +22,8 @@
     <string name="connection_status_sending">Transmitting packets…</string>
     <string name="current_steering_angle_initial">0.0°</string>
     <string name="current_steering_angle_format">%.1f°</string>
+    <string name="service_description">VCE steering sensor</string>
+    <string name="notification_content">Sensing and transmitting steering angle…</string>
+    <string name="channel_name">VCE Steering Sensor</string>
+    <string name="channel_description">Steering sensor for the Virtual Cycling Environment (VCE)</string>
 </resources>

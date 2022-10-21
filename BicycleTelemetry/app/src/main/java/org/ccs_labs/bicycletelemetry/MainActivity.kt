@@ -1,21 +1,18 @@
 package org.ccs_labs.bicycletelemetry
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
+import android.os.IBinder
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
-import android.widget.CompoundButton
-import android.widget.SeekBar
-import androidx.activity.viewModels
-import androidx.work.Data
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.OutOfQuotaPolicy
-import androidx.work.WorkRequest
+import androidx.lifecycle.Observer
 import org.ccs_labs.bicycletelemetry.databinding.ActivityMainBinding
-import kotlin.NumberFormatException
+import java.util.*
 
 const val DEBUG_TAG : String = "BikeMain"
 
@@ -33,12 +30,66 @@ class MainActivity : AppCompatActivity() {
      */
     var mCommunicatorStarted = false
 
-    private val mSteeringDataModel: SteeringDataModel by viewModels()
-    // `by viewModels()` should provide access to an application-wide instance of
-    // the SteeringDataModel view model, if I understand correctly:
-    // https://stackoverflow.com/a/54313573/1018176
+    private val mTAG = "STEERING_SENSOR_ACTIVITY"
 
-    private var mPreviousLowPassStepTimeMillis : Long = 0
+    private var mSteeringSensorService: SteeringSensorService? = null
+    private var mSteeringSensorServiceIsBound: Boolean? = null
+
+    /**
+     * Interface for getting the instance of binder from our service class
+     * So client can get instance of our service class and can directly communicate with it.
+     */
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(className: ComponentName, iBinder: IBinder) {
+            Log.d(mTAG, "ServiceConnection: connected to service.")
+            // We've bound to MyService, cast the IBinder and get MyBinder instance
+            val binder = iBinder as SteeringSensorService.SteeringSensorServiceBinder
+            mSteeringSensorService = binder.service
+            mSteeringSensorServiceIsBound = true
+            // TODO: create relevant observers for any live data
+            observeCurrentAzimuth()
+        }
+
+        override fun onServiceDisconnected(arg0: ComponentName) {
+            Log.d(mTAG, "ServiceConnection: disconnected from service.")
+            mSteeringSensorServiceIsBound = false
+        }
+    }
+
+    /**
+     * Used to bind to our service class
+     */
+    private fun bindService() {
+        Intent(this, SteeringSensorService::class.java).also { intent ->
+            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        }
+    }
+
+    /**
+     * Used to unbind and stop our service class
+     */
+    private fun unbindService() {
+        Intent(this, SteeringSensorService::class.java).also { intent ->
+            unbindService(serviceConnection)
+        }
+    }
+
+    private fun observeCurrentAzimuth() {
+        mSteeringSensorService?.currentAzimuthDeg?.observe(
+        this, Observer {
+            activityMainBinding.tvCurrentSteeringAngle.text = String.format(
+                Locale.ROOT, "%.0f", it
+            )
+        })
+    }
+
+    private fun observeSensorStatusText() {
+        mSteeringSensorService?.statusText?.observe(
+            this, Observer {
+                setConnectionStatusText(it)
+            }
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,11 +99,13 @@ class MainActivity : AppCompatActivity() {
         setContentView(view)
 
         activityMainBinding.btConnect.setOnClickListener {
-            mSteeringDataModel.startTransmission()
+            bindService()
         }
 
         activityMainBinding.btResetStraight.setOnClickListener {
-            mSteeringDataModel.setStraight()
+            if (mSteeringSensorServiceIsBound == true) {
+                mSteeringSensorService?.resetStraight()
+            }
         }
 
         if (savedInstanceState != null) {
@@ -70,8 +123,6 @@ class MainActivity : AppCompatActivity() {
             /* No saved app instance -> try to load settings from previous sessions, else use defaults: */
             activityMainBinding.etServerAddress.setText(getSavedServerAddress())
         }
-
-        mPreviousLowPassStepTimeMillis = System.currentTimeMillis() // initialization
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -91,7 +142,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun setConnectionStatusText(msg: String) {
+    private fun setConnectionStatusText(msg: String) {
         runOnUiThread {
             activityMainBinding.tvConnectionStatus.text = msg
         }
@@ -128,6 +179,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        unbindService()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
