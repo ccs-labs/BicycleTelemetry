@@ -12,6 +12,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Binder
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationCompat.Builder
 import androidx.lifecycle.MutableLiveData
@@ -28,11 +29,9 @@ const val ACTION_START_FOREGROUND_SERVICE = "ACTION_START_FOREGROUND_SERVICE"
 const val ACTION_STOP_FOREGROUND_SERVICE = "ACTION_STOP_FOREGROUND_SERVICE"
 const val ACTION_RESET_STRAIGHT = "ACTION_RESET_STRAIGHT"
 const val STEERING_SENSOR_NOTIFICATION_ID = "STEERING_SENSOR_NOTIFICATION_ID"
+const val INTENT_EXTRA_SERVER_ADDRESS = "SERVER_ADDRESS"
 
-class SteeringSensorService(
-    appContext: Context,
-    workerParams: WorkerParameters
-):
+class SteeringSensorService():
     Service(),
     SensorEventListener {
 
@@ -43,10 +42,12 @@ class SteeringSensorService(
             get() = this@SteeringSensorService
     }
 
+    private val mTAG = "STEERING_SENSOR_SERVICE"
+
     val currentAzimuthDeg: MutableLiveData<Double> = MutableLiveData<Double>(0.0)
     val statusText: MutableLiveData<String> = MutableLiveData<String>("")
-    val stopped: MutableLiveData<Boolean> = MutableLiveData<Boolean>(true)
-    val serverAddress: MutableLiveData<String> = MutableLiveData<String>("") // TODO: set in Activity
+    // val stopped: MutableLiveData<Boolean> = MutableLiveData<Boolean>(true)
+    // val serverAddress: MutableLiveData<String> = MutableLiveData<String>("") // TODO: set in Activity
 
     private val mBinder = SteeringSensorServiceBinder()
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -55,11 +56,7 @@ class SteeringSensorService(
         onBufferOverflow=BufferOverflow.DROP_OLDEST
     )
 
-    private val mCommunicator = Communicator(
-        address = workerParams.inputData.getString("ADDRESS").orEmpty(),
-        intervalMillis = 50,
-        steeringSensorService = this,
-    )
+    private var mCommunicator: Communicator? = null
 
     // Orientation readings according to https://developer.android.com/guide/topics/sensors/sensors_position
     private lateinit var mSensorManager: SensorManager
@@ -219,16 +216,19 @@ class SteeringSensorService(
     // Called when another class intends to bind to this service for
     // back-and-forth communication.
     override fun onBind(p0: Intent?): IBinder {
+        Log.d(mTAG, "onBind called!")
         return mBinder
     }
 
     // Called when the service is started,
     // i.e., after onCreate().
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(mTAG, "onStartCommand called!")
         if (intent != null) {
             when (intent.action) {
                 ACTION_START_FOREGROUND_SERVICE -> {
-                    startForegroundService()
+
+                    startSteeringSensor(intent)
                 }
                 ACTION_STOP_FOREGROUND_SERVICE -> {
                     stopForegroundService()
@@ -257,7 +257,21 @@ class SteeringSensorService(
         notificationManager.createNotificationChannel(channel)
     }
 
-    private fun startForegroundService() {
+    private fun startSteeringSensor(intent: Intent) {
+        if (intent.extras == null) {
+            Log.e(mTAG, "no extras in onStartCommand")
+        }
+        Log.d(
+            mTAG,
+            "server address: ${intent.extras!!.getString(INTENT_EXTRA_SERVER_ADDRESS, "not set!!!")}"
+        )
+        mCommunicator = Communicator(
+            //address = workerParams.inputData.getString("ADDRESS").orEmpty(),
+            address = intent.extras!!.getString(INTENT_EXTRA_SERVER_ADDRESS)!!,
+            intervalMillis = 50,
+            steeringSensorService = this,
+        )
+
         // Intent for tapping the "Reset straight" button in the notification:
         val resetStraightIntent = Intent(ACTION_RESET_STRAIGHT)
         val resetStraightPendingIntent = PendingIntent.getBroadcast(
@@ -300,7 +314,7 @@ class SteeringSensorService(
         mSensorManager =
             applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         coroutineScope.launch {
-            mCommunicator.transmitBlocking()
+            mCommunicator!!.transmitBlocking()
         }
     }
 

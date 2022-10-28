@@ -56,11 +56,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun startSteeringSensorService() {
+        Intent(this, SteeringSensorService::class.java)
+            .putExtra(
+                INTENT_EXTRA_SERVER_ADDRESS,
+                activityMainBinding.etServerAddress.text.toString()
+            )
+            .setAction(ACTION_START_FOREGROUND_SERVICE)
+            .also { intent ->
+            startService(intent)
+        }
+    }
+
     /**
      * Used to bind to our service class
      */
-    private fun bindService() {
-        Intent(this, SteeringSensorService::class.java).also { intent ->
+    private fun bindSteeringSensorService() {
+        Intent(this, SteeringSensorService::class.java)
+            .also { intent ->
             bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
         }
     }
@@ -68,7 +81,7 @@ class MainActivity : AppCompatActivity() {
     /**
      * Used to unbind and stop our service class
      */
-    private fun unbindService() {
+    private fun unbindSteeringSensorService() {
         Intent(this, SteeringSensorService::class.java).also { intent ->
             unbindService(serviceConnection)
         }
@@ -99,7 +112,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(view)
 
         activityMainBinding.btConnect.setOnClickListener {
-            bindService()
+            startSteeringSensorService()
+            bindSteeringSensorService()
         }
 
         activityMainBinding.btResetStraight.setOnClickListener {
@@ -117,8 +131,6 @@ class MainActivity : AppCompatActivity() {
             mCommunicatorStarted = savedInstanceState.getBoolean(STATE_COMMUNICATOR_STARTED)
             val addr = savedInstanceState.getString(STATE_SERVER_ADDRESS)
             activityMainBinding.etServerAddress.setText(if (addr != null && addr.isNotEmpty()) addr else getSavedServerAddress())
-            val lowPassCutoff = savedInstanceState.getFloat(
-                STATE_LOW_PASS_CUTOFF, getString(R.string.low_pass_cutoff_default).toFloat())
         } else {
             /* No saved app instance -> try to load settings from previous sessions, else use defaults: */
             activityMainBinding.etServerAddress.setText(getSavedServerAddress())
@@ -179,7 +191,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        unbindService()
+        unbindSteeringSensorService()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

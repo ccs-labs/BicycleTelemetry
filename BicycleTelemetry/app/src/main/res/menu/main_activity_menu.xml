@@ -5,9 +5,4 @@
         app:showAsAction="never"
         android:title="@string/set_default_server">
     </item>
-    <item
-        android:id="@+id/action_default_low_pass_cutoff"
-        app:showAsAction="never"
-        android:title="@string/set_default_low_pass_cutoff">
-    </item>
 </menu>

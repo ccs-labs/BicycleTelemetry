@@ -171,9 +171,10 @@ class Communicator(
             datagramSocket!!.disconnect()
             datagramSocket!!.connect(InetAddress.getByName(host), port)
             if (datagramSocket!!.isConnected) {
-                steeringSensorService.statusText.value = steeringSensorService.getString(
+
+                steeringSensorService.statusText.postValue(steeringSensorService.getString(
                     R.string.connection_status_sending
-                )
+                ))
             }
         } catch (e: SocketException) {
             // DatagramSocket constructor:
