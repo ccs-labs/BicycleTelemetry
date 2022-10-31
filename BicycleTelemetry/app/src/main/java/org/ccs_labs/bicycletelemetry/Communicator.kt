@@ -86,9 +86,9 @@ class Communicator(
                         datagramSocket!!.send(datagramPacket)
                     } catch (e: IOException) {
                         // "if an I/O error occurs."
-                        steeringSensorService.statusText.value = steeringSensorService.getString(
+                        steeringSensorService.statusText.postValue(steeringSensorService.getString(
                             R.string.send_io_exception
-                        ).format(e)
+                        ).format(e))
                         // setConnectionStatusText(
                         //     activity.getString(R.string.send_io_exception).format(e.message)
                         // )
@@ -96,9 +96,9 @@ class Communicator(
                     } catch (e: SecurityException) {
                         // "if a security manager exists and its checkMulticast or
                         // checkConnect method doesn't allow the send."
-                        steeringSensorService.statusText.value = steeringSensorService.getString(
+                        steeringSensorService.statusText.postValue(steeringSensorService.getString(
                             R.string.send_security_exception
-                        ).format(e)
+                        ).format(e))
                         // setConnectionStatusText(
                         //     activity.getString(R.string.send_security_exception)
                         //         .format(e.message)
@@ -107,9 +107,9 @@ class Communicator(
                     } catch (e: PortUnreachableException) {
                         // "may be thrown if the socket is connected to a currently unreachable destination.
                         // Note, there is no guarantee that the exception will be thrown."
-                        steeringSensorService.statusText.value = steeringSensorService.getString(
+                        steeringSensorService.statusText.postValue(steeringSensorService.getString(
                             R.string.send_port_unreachable_exception
-                        )
+                        ))
                         // setConnectionStatusText(
                         //     activity.getString(R.string.send_port_unreachable_exception)
                         // )

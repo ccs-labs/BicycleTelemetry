@@ -80,10 +80,9 @@ class SteeringSensorService():
     }
 
     private fun processSensorEvents() = coroutineScope.launch {
-        // Running in a coroutine so we're able to call setProgress()
-        // to notify listeners of this worker, mainly to display the
-        // current steering angle in the UI.
         Log.d(mTAG, "processSensorEvents started")
+
+        initializeSensors(true, false)
 
         sensorEvents.consumeEach(fun (it: SensorEvent) {
             val rotationMatrix = FloatArray(9)
@@ -113,7 +112,6 @@ class SteeringSensorService():
                     )
                 }
                 Sensor.TYPE_ROTATION_VECTOR -> {
-                    Log.d(mTAG, String.format("%f", it.values[0]))
                     SensorManager.getRotationMatrixFromVector(rotationMatrix, it.values)
                 }
                 else -> return
@@ -151,6 +149,8 @@ class SteeringSensorService():
         useGyroscope: Boolean,
         transmitDebugInfo: Boolean,
     ) {
+        mSensorManager =
+            applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         mSensorManager.unregisterListener(this)
 
         if (!useGyroscope || transmitDebugInfo) {
@@ -237,15 +237,17 @@ class SteeringSensorService():
                     startSteeringSensor(intent)
                 }
                 ACTION_STOP_FOREGROUND_SERVICE -> {
+                    Log.d(mTAG, "stopping foreground service from notification")
                     stopForegroundService()
                 }
                 ACTION_RESET_STRAIGHT -> {
+                    Log.d(mTAG, "resetting straight from notification")
                     resetStraight()
                 }
             }
         }
         // If service killed, after returning from here, restart
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun createNotificationChannel() {
@@ -264,9 +266,6 @@ class SteeringSensorService():
     }
 
     private fun startSteeringSensor(intent: Intent) {
-        mSensorManager =
-            applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        initializeSensors(true, false)
         processSensorEvents()
 
         if (intent.extras == null) {
@@ -284,15 +283,23 @@ class SteeringSensorService():
         )
 
         // Intent for tapping the "Reset straight" button in the notification:
-        val resetStraightIntent = Intent(ACTION_RESET_STRAIGHT)
-        val resetStraightPendingIntent = PendingIntent.getBroadcast(
-            this, 0, resetStraightIntent, PendingIntent.FLAG_IMMUTABLE
+        val resetStraightIntent = Intent(this, SteeringSensorService::class.java)
+            .setAction(ACTION_RESET_STRAIGHT)
+        val resetStraightPendingIntent = PendingIntent.getService(
+            this,
+            ACTION_RESET_STRAIGHT.hashCode(),
+            resetStraightIntent,
+            PendingIntent.FLAG_IMMUTABLE
         )
 
         // Intent for tapping the "Stop" button in the notification:
-        val stopIntent = Intent(ACTION_STOP_FOREGROUND_SERVICE)
-        val stopPendingIntent = PendingIntent.getBroadcast(
-            this, 0, stopIntent, PendingIntent.FLAG_IMMUTABLE
+        val stopIntent = Intent(this, SteeringSensorService::class.java)
+            .setAction(ACTION_STOP_FOREGROUND_SERVICE)
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            ACTION_STOP_FOREGROUND_SERVICE.hashCode(),
+            stopIntent,
+            PendingIntent.FLAG_IMMUTABLE
         )
 
         // Intent for tapping the notification itself:
@@ -328,7 +335,9 @@ class SteeringSensorService():
     }
 
     private fun stopForegroundService() {
-        // TODO: cleanup?
+        mCommunicator?.close()
+        mSensorManager.unregisterListener(this)
+        stopForeground(Service.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
