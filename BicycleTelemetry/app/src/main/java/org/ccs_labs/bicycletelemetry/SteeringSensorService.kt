@@ -64,11 +64,10 @@ class SteeringSensorService():
     internal val mSensorDataMutex: Mutex = Mutex()
     private val mAccelerometerReading = FloatArray(3)
     private val mMagnetometerReading = FloatArray(3)
-    internal val mOrientationAngles = FloatArray(3)
+    private val mOrientationAngles = FloatArray(3)
     private val mOrientationAnglesWithoutGyro = FloatArray(3)
     private val mOrientationStraight = FloatArray(3) { 0f }
     private val mOrientationStraightWithoutGyro = FloatArray(3) { 0f }
-    private var mPreviousLowPassStepTimeMillis : Long = 0
 
     override fun onSensorChanged(p0: SensorEvent?) {
         // Process all events in a coroutine so we're able to call setProgress()…
@@ -84,13 +83,18 @@ class SteeringSensorService():
         // Running in a coroutine so we're able to call setProgress()
         // to notify listeners of this worker, mainly to display the
         // current steering angle in the UI.
-        initializeSensors(false, false)
+        Log.d(mTAG, "processSensorEvents started")
+
         sensorEvents.consumeEach(fun (it: SensorEvent) {
             val rotationMatrix = FloatArray(9)
 
             // TODO: handle possible NullPointerExceptions
+            if (it.sensor == null) {
+                Log.e(mTAG, "sensor is null!")
+            }
             when (it.sensor?.type) {
-                Sensor.TYPE_ACCELEROMETER ->
+                Sensor.TYPE_ACCELEROMETER -> {
+                    // tested: not 0
                     System.arraycopy(
                         it.values,
                         0,
@@ -98,7 +102,8 @@ class SteeringSensorService():
                         0,
                         mAccelerometerReading.size
                     )
-                Sensor.TYPE_MAGNETIC_FIELD ->
+                }
+                Sensor.TYPE_MAGNETIC_FIELD -> {
                     System.arraycopy(
                         it.values,
                         0,
@@ -106,8 +111,11 @@ class SteeringSensorService():
                         0,
                         mMagnetometerReading.size
                     )
-                Sensor.TYPE_ROTATION_VECTOR ->
+                }
+                Sensor.TYPE_ROTATION_VECTOR -> {
+                    Log.d(mTAG, String.format("%f", it.values[0]))
                     SensorManager.getRotationMatrixFromVector(rotationMatrix, it.values)
+                }
                 else -> return
             }
 
@@ -127,16 +135,16 @@ class SteeringSensorService():
                 }
             }
 
-            currentAzimuthDeg.value = normalizeAngleDegrees(
+            currentAzimuthDeg.postValue(normalizeAngleDegrees(
                 Math.toDegrees(getCurrentAzimuthRad(false))
                 // Normalize angle again b/c who knows what toDegrees will do to
                 // my previously normalized angle in radians.
-            )
+            ))
         })
     }
 
     override fun onAccuracyChanged(p0: Sensor?, p1: Int) {
-        TODO("Not yet implemented")
+        // nothing to do here…
     }
 
     private fun initializeSensors(
@@ -209,7 +217,6 @@ class SteeringSensorService():
             (oriAngles[0] - straight[0]).toDouble()
         )
 
-        mPreviousLowPassStepTimeMillis = System.currentTimeMillis()
         return normalizeAngleRadians(newAngle)
     }
 
@@ -227,7 +234,6 @@ class SteeringSensorService():
         if (intent != null) {
             when (intent.action) {
                 ACTION_START_FOREGROUND_SERVICE -> {
-
                     startSteeringSensor(intent)
                 }
                 ACTION_STOP_FOREGROUND_SERVICE -> {
@@ -258,6 +264,11 @@ class SteeringSensorService():
     }
 
     private fun startSteeringSensor(intent: Intent) {
+        mSensorManager =
+            applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        initializeSensors(true, false)
+        processSensorEvents()
+
         if (intent.extras == null) {
             Log.e(mTAG, "no extras in onStartCommand")
         }
@@ -311,8 +322,6 @@ class SteeringSensorService():
 
         startForeground(STEERING_SENSOR_NOTIFICATION_ID.hashCode(), notification)
 
-        mSensorManager =
-            applicationContext.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         coroutineScope.launch {
             mCommunicator!!.transmitBlocking()
         }
