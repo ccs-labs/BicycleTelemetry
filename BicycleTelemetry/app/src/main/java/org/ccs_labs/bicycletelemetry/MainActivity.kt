@@ -10,17 +10,11 @@ import android.os.IBinder
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
-import androidx.lifecycle.Observer
 import org.ccs_labs.bicycletelemetry.databinding.ActivityMainBinding
 import java.util.*
 
-const val DEBUG_TAG : String = "BikeMain"
-
 const val STATE_SERVER_ADDRESS = "serverAddress"
-const val STATE_LOW_PASS_CUTOFF = "lowPassCutoff"
 const val STATE_COMMUNICATOR_STARTED = "communicatorStarted"
-const val STATE_TRANSMIT_DEBUG = "transmitDebug"
-const val STATE_GYRO_FUSION = "gyroSensorFusion"
 
 class MainActivity : AppCompatActivity() {
     private lateinit var activityMainBinding: ActivityMainBinding
@@ -46,17 +40,29 @@ class MainActivity : AppCompatActivity() {
             val binder = iBinder as SteeringSensorService.SteeringSensorServiceBinder
             mSteeringSensorService = binder.service
             mSteeringSensorServiceIsBound = true
-            // TODO: create relevant observers for any live data
+
+            // create relevant observers for any live data:
             observeCurrentAzimuth()
+            observeSensorStatusText()
+            observeServiceStopped()
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
             Log.d(mTAG, "ServiceConnection: disconnected from service.")
             mSteeringSensorServiceIsBound = false
+            activityMainBinding.btConnect.isEnabled = true
+        }
+
+        override fun onBindingDied(name: ComponentName?) {
+            Log.d(mTAG, "ServiceConnection: binding died")
+            mSteeringSensorServiceIsBound = false
+            activityMainBinding.btConnect.isEnabled = true
         }
     }
 
     private fun startSteeringSensorService() {
+        activityMainBinding.btConnect.isEnabled = false
+        saveCurrentServerAddress()
         Intent(this, SteeringSensorService::class.java)
             .putExtra(
                 INTENT_EXTRA_SERVER_ADDRESS,
@@ -64,8 +70,8 @@ class MainActivity : AppCompatActivity() {
             )
             .setAction(ACTION_START_FOREGROUND_SERVICE)
             .also { intent ->
-            startService(intent)
-        }
+                startService(intent)
+            }
     }
 
     /**
@@ -82,26 +88,39 @@ class MainActivity : AppCompatActivity() {
      * Used to unbind and stop our service class
      */
     private fun unbindSteeringSensorService() {
-        Intent(this, SteeringSensorService::class.java).also { intent ->
-            unbindService(serviceConnection)
+        try {
+            Intent(this, SteeringSensorService::class.java).also { intent ->
+                unbindService(serviceConnection)
+            }
+        } catch (e: IllegalArgumentException) {
+            Log.d(mTAG, "can't unbind steering sensor service; probably already stopped")
+        } finally {
+            mSteeringSensorServiceIsBound = false
         }
     }
 
     private fun observeCurrentAzimuth() {
-        mSteeringSensorService?.currentAzimuthDeg?.observe(
-        this, Observer {
+        mSteeringSensorService?.currentAzimuthDeg?.observe(this) {
             activityMainBinding.tvCurrentSteeringAngle.text = String.format(
                 Locale.ROOT, "%.0f", it
             )
-        })
+        }
+    }
+
+    private fun observeServiceStopped() {
+        mSteeringSensorService?.stopped?.observe(this) {
+            if (it) {
+                Log.d(mTAG, "SteeringSensorService stopped -> unbinding")
+                unbindSteeringSensorService()
+                activityMainBinding.btConnect.isEnabled = true
+            }
+        }
     }
 
     private fun observeSensorStatusText() {
-        mSteeringSensorService?.statusText?.observe(
-            this, Observer {
-                setConnectionStatusText(it)
-            }
-        )
+        mSteeringSensorService?.statusText?.observe(this) {
+            setConnectionStatusText(it)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -130,7 +149,11 @@ class MainActivity : AppCompatActivity() {
             //Log.d(DEBUG_TAG, "Loading saved instance state")
             mCommunicatorStarted = savedInstanceState.getBoolean(STATE_COMMUNICATOR_STARTED)
             val addr = savedInstanceState.getString(STATE_SERVER_ADDRESS)
-            activityMainBinding.etServerAddress.setText(if (addr != null && addr.isNotEmpty()) addr else getSavedServerAddress())
+            activityMainBinding.etServerAddress.setText(
+                if (addr != null && addr.isNotEmpty())
+                    addr
+                else getSavedServerAddress()
+            )
         } else {
             /* No saved app instance -> try to load settings from previous sessions, else use defaults: */
             activityMainBinding.etServerAddress.setText(getSavedServerAddress())
@@ -160,13 +183,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun setConnectButtonText(text: String) {
-        runOnUiThread {
-            activityMainBinding.btConnect.text = text
-        }
-    }
+//    fun setConnectButtonText(text: String) {
+//        runOnUiThread {
+//            activityMainBinding.btConnect.text = text
+//        }
+//    }
 
-    // TODO: use!
     private fun saveCurrentServerAddress() {
         val sharedPref = getPreferences(Context.MODE_PRIVATE) ?: return
         with (sharedPref.edit()) {
@@ -203,4 +225,6 @@ class MainActivity : AppCompatActivity() {
 
         super.onSaveInstanceState(outState)
     }
+
+
 }

@@ -24,7 +24,6 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-const val TAG_STEERING_SENSOR_SERVICE = "STEERING_SENSOR_SERVICE"
 const val ACTION_START_FOREGROUND_SERVICE = "ACTION_START_FOREGROUND_SERVICE"
 const val ACTION_STOP_FOREGROUND_SERVICE = "ACTION_STOP_FOREGROUND_SERVICE"
 const val ACTION_RESET_STRAIGHT = "ACTION_RESET_STRAIGHT"
@@ -46,7 +45,7 @@ class SteeringSensorService():
 
     val currentAzimuthDeg: MutableLiveData<Double> = MutableLiveData<Double>(0.0)
     val statusText: MutableLiveData<String> = MutableLiveData<String>("")
-    // val stopped: MutableLiveData<Boolean> = MutableLiveData<Boolean>(true)
+    val stopped: MutableLiveData<Boolean> = MutableLiveData<Boolean>(false)
     // val serverAddress: MutableLiveData<String> = MutableLiveData<String>("") // TODO: set in Activity
 
     private val mBinder = SteeringSensorServiceBinder()
@@ -338,6 +337,9 @@ class SteeringSensorService():
         mCommunicator?.close()
         mSensorManager.unregisterListener(this)
         stopForeground(Service.STOP_FOREGROUND_REMOVE)
+        // Notify main activity that service has stopped
+        // (and that the start button can be re-enabled):
+        stopped.postValue(true)
         stopSelf()
     }
 

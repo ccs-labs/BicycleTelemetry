@@ -59,7 +59,8 @@
             android:text="@string/current_steering_angle_initial"
             android:textAppearance="@style/TextAppearance.AppCompat.Large"
             app:layout_constraintStart_toEndOf="@id/tvSteeringAngleTitle"
-            app:layout_constraintTop_toBottomOf="@+id/cbInvertRotation" />
+            app:layout_constraintTop_toBottomOf="@id/btResetStraight"
+            tools:layout_editor_absoluteY="221dp" />
 
         <TextView
             android:id="@+id/tvSteeringAngleTitle"
@@ -73,19 +74,8 @@
             android:textColor="@color/lightText"
             app:layout_constraintEnd_toStartOf="@+id/tvCurrentSteeringAngle"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/cbInvertRotation" />
-
-        <CheckBox
-            android:id="@+id/cbInvertRotation"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginTop="8dp"
-            android:text="@string/cbInvertRotation"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/btResetStraight" />
+            app:layout_constraintTop_toBottomOf="@id/btResetStraight"
+            tools:layout_editor_absoluteY="221dp" />
 
 
         <!--<org.ccs_labs.bicycletelemetry.SteeringAngleVisualizationView
