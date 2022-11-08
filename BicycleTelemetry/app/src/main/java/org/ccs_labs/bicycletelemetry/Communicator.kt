@@ -43,6 +43,7 @@ class Communicator(
      */
     @Suppress("BlockingMethodInNonBlockingContext")
     private suspend fun run() {
+        // TODO: handle no wifi/internet
         try {
             val addressElements = address.split(":")
             if (addressElements.size != 2) {

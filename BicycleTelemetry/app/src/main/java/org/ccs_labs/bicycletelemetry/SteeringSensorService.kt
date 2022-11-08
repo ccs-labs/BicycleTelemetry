@@ -313,7 +313,9 @@ class SteeringSensorService():
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(getString(R.string.notification_content))
             .setContentIntent(contentPendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOngoing(true) // -> also show on lockscreen
             .addAction(
                 R.drawable.vec_reset_straight,
                 getString(R.string.reset_straight),
